@@ -5,7 +5,7 @@ Streamlining your meeting scheduling with ease.
 ## Build Executable
 
 ```shell
-go build -o bin/gomeet main.go
+go build -o bin/gomeet.exe main.go
 ```
 
 ## Usage
@@ -17,7 +17,7 @@ You have two options for running it: either on a per-usage basis or by adding th
 Simply execute the built binary to launch the application.
 
 ```shell
-./bin/gomeet
+./bin/gomeet.exe
 ```
 
 ### Startup Service (Windows)
