@@ -30,6 +30,9 @@ To have `gomeet` launch automatically on startup, follow these steps:
 4. Name the new value as `GoMeet`.
 5. Double-click the new value and set its data to the full path of the `gomeet` executable. For example: `C:\bin\gomeet.exe`.
 
-
 > [!NOTE]
-> Ensure that the `meetings.json` file is placed in the same directory as the executable.
+> Ensure that the `meetings.json` file is placed in the config directory of your system:
+> On Unix systems, it returns `$XDG_CONFIG_HOME`, if non-empty, else `$HOME/.config`.
+> On Darwin, it returns `$HOME/Library/Application Support`.
+> On Windows, it returns `%AppData%` (i.e. `C:\Users\User\AppData\Roaming\`).
+> On Plan 9, it returns `$home/lib`.

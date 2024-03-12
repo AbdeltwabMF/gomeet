@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"time"
 )
@@ -20,7 +21,12 @@ type Meeting struct {
 
 // entry point for the executable
 func main() {
-	file, err := os.Open("meetings.json")
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		fmt.Println("Error finding config directory:", err)
+		return
+	}
+	file, err := os.Open(filepath.Join(configDir, "meetings.json"))
 
 	if err != nil {
 		fmt.Println("Error while opening JSON file:", err)
