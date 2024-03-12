@@ -5,7 +5,7 @@ Streamlining your meeting scheduling with ease.
 ## Build Executable
 
 ```shell
-go build -o bin/gomeet.exe main.go
+go build -o bin/gomeet.exe -ldflags "-H windowsgui" main.go
 ```
 
 ## Usage
