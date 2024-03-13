@@ -28,10 +28,10 @@ func main() {
 		fmt.Println("Error finding config directory:", err)
 		return
 	}
-	file, err := os.Open(filepath.Join(configDir, "meetings.json"))
 
+	file, err := os.Open(filepath.Join(configDir, "meetings.json"))
 	if err != nil {
-		fmt.Println("Error while opening JSON file:", err)
+		fmt.Println("Error opening JSON file:", err)
 		return
 	}
 	defer file.Close()
@@ -44,14 +44,13 @@ func main() {
 		return
 	}
 
-	now := time.Now()
-
 	for {
-		now = time.Now()
+		now := time.Now()
 		hour, minute := now.Hour(), now.Minute()
 
 		for _, meeting := range meetings {
 			fmt.Println(meeting.Topic)
+
 			mt, err := time.Parse("15:04", meeting.When)
 			if err != nil {
 				fmt.Println("Error parsing time:", err)
@@ -63,7 +62,6 @@ func main() {
 				err := beeep.Notify("GoMeet", "Your meeting link is set to launch shortly", "assets/information.png")
 				if err != nil {
 					fmt.Println("Error sending notification:", err)
-					return
 				}
 
 				err = openBrowser(meeting.Link)
@@ -71,6 +69,7 @@ func main() {
 				if err != nil {
 					continue
 				}
+
 				// do not launch it again if you succeeded
 				time.Sleep(time.Minute)
 			}
