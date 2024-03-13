@@ -11,6 +11,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"time"
+
+	"github.com/gen2brain/beeep"
 )
 
 type Meeting struct {
@@ -58,7 +60,13 @@ func main() {
 
 			mh, mm := mt.Hour(), mt.Minute()
 			if hour == mh && minute == mm {
-				err := openBrowser(meeting.Link)
+				err := beeep.Notify("GoMeet", "Your meeting link is set to launch shortly", "assets/information.png")
+				if err != nil {
+					fmt.Println("Error sending notification:", err)
+					return
+				}
+
+				err = openBrowser(meeting.Link)
 				// retry to open it if you failed
 				if err != nil {
 					continue
