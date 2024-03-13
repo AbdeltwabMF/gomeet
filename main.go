@@ -16,12 +16,51 @@ import (
 )
 
 type Meeting struct {
-	Topic string `json:"topic`
+	Topic string `json:"topic"`
 	Link  string `json:"link"`
 	When  string `json:"when"`
 }
 
-// entry point for the executable
+// loadMeetings loads meetings from the given JSON file.
+func loadMeetings(filePath string) ([]Meeting, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("error opening JSON file: %w", err)
+	}
+	defer file.Close()
+
+	var meetings []Meeting
+	if err := json.NewDecoder(file).Decode(&meetings); err != nil {
+		return nil, fmt.Errorf("error decoding JSON file: %w", err)
+	}
+
+	return meetings, nil
+}
+
+// notifyMeeting sends a notification for the given meeting.
+func notifyMeeting(meeting Meeting) error {
+	err := beeep.Notify("GoMeet", "Your meeting link is set to launch shortly", "assets/information.png")
+	if err != nil {
+		return fmt.Errorf("error sending notification: %w", err)
+	}
+	return nil
+}
+
+// openMeetingLink opens the meeting link in the default web browser.
+func openMeetingLink(url string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", url)
+	case "darwin":
+		cmd = exec.Command("open", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	return cmd.Start()
+}
+
+// main is the entry point for the executable.
 func main() {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
@@ -29,18 +68,9 @@ func main() {
 		return
 	}
 
-	file, err := os.Open(filepath.Join(configDir, "meetings.json"))
+	meetings, err := loadMeetings(filepath.Join(configDir, "meetings.json"))
 	if err != nil {
-		fmt.Println("Error opening JSON file:", err)
-		return
-	}
-	defer file.Close()
-
-	var meetings []Meeting
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&meetings)
-	if err != nil {
-		fmt.Println("Error decoding JSON file:", err)
+		fmt.Println(err)
 		return
 	}
 
@@ -59,37 +89,25 @@ func main() {
 
 			mh, mm := mt.Hour(), mt.Minute()
 			if hour == mh && minute == mm {
-				err := beeep.Notify("GoMeet", "Your meeting link is set to launch shortly", "assets/information.png")
-				if err != nil {
-					fmt.Println("Error sending notification:", err)
+				if err := notifyMeeting(meeting); err != nil {
+					fmt.Println(err)
 				}
 
-				err = openBrowser(meeting.Link)
-				// retry to open it if you failed
-				if err != nil {
-					continue
+				// Retry opening the link if failed
+				for {
+					if err := openMeetingLink(meeting.Link); err != nil {
+						fmt.Println("Error opening link:", err)
+						continue
+					}
+					break
 				}
 
-				// do not launch it again if you succeeded
+				// Wait before checking the next meeting
 				time.Sleep(time.Minute)
 			}
 		}
 
-		// sleep but wake up before minute ends
+		// Sleep until the next check time
 		time.Sleep(20 * time.Second)
 	}
-}
-
-func openBrowser(url string) error {
-	var cmd *exec.Cmd
-
-	switch runtime.GOOS {
-	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", url)
-	case "darwin":
-		cmd = exec.Command("open", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
-	}
-	return cmd.Start()
 }
