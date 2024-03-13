@@ -1,11 +1,9 @@
-//go:build prod
-
-// main is a special name declaring an executable rather than a library
 package main
 
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,12 +14,13 @@ import (
 )
 
 type Meeting struct {
-	Topic string `json:"topic"`
-	Link  string `json:"link"`
-	When  string `json:"when"`
+	Topic string   `json:"topic"`
+	Link  string   `json:"link"`
+	When  string   `json:"when"`
+	Days  []string `json:"days"`
 }
 
-// loadMeetings loads meetings from the given JSON file.
+// loadMeetings loads meetings from the given JSON file
 func loadMeetings(filePath string) ([]Meeting, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -37,7 +36,7 @@ func loadMeetings(filePath string) ([]Meeting, error) {
 	return meetings, nil
 }
 
-// notifyMeeting sends a notification for the given meeting.
+// notifyMeeting sends a notification for the given meeting
 func notifyMeeting(meeting Meeting) error {
 	err := beeep.Notify("GoMeet", "Your meeting link is set to launch shortly", "assets/information.png")
 	if err != nil {
@@ -46,7 +45,7 @@ func notifyMeeting(meeting Meeting) error {
 	return nil
 }
 
-// openMeetingLink opens the meeting link in the default web browser.
+// openMeetingLink opens the meeting link in the default web browser
 func openMeetingLink(url string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
@@ -60,54 +59,63 @@ func openMeetingLink(url string) error {
 	return cmd.Start()
 }
 
-// main is the entry point for the executable.
 func main() {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
-		fmt.Println("Error finding config directory:", err)
-		return
+		log.Fatalf("Error finding config directory: %v\n", err)
 	}
 
 	meetings, err := loadMeetings(filepath.Join(configDir, "meetings.json"))
 	if err != nil {
-		fmt.Println(err)
-		return
+		log.Fatalln(err)
 	}
 
 	for {
 		now := time.Now()
-		hour, minute := now.Hour(), now.Minute()
-
 		for _, meeting := range meetings {
-			fmt.Println(meeting.Topic)
+			fmt.Printf("%s when %s\n", meeting.Topic, meeting.When)
 
-			mt, err := time.Parse("15:04", meeting.When)
-			if err != nil {
-				fmt.Println("Error parsing time:", err)
+			// Continue if today is not a working day
+			isWorkingDay := func() bool {
+				for _, weekday := range meeting.Days {
+					if weekday == now.Weekday().String() {
+						return true
+					}
+				}
+				return false
+			}()
+
+			if !isWorkingDay {
 				continue
 			}
 
-			mh, mm := mt.Hour(), mt.Minute()
-			if hour == mh && minute == mm {
+			meetingTime, err := time.Parse("15:04", meeting.When)
+			if err != nil {
+				fmt.Printf("Error parsing time: %v\n", err)
+				continue
+			}
+
+			// If it's the same hour and minute, attempt to start the meeting
+			if now.Hour() == meetingTime.Hour() && now.Minute() == meetingTime.Minute() {
 				if err := notifyMeeting(meeting); err != nil {
 					fmt.Println(err)
 				}
 
 				// Retry opening the link if failed
-				for {
+				for i := 0; i < 100; i++ {
 					if err := openMeetingLink(meeting.Link); err != nil {
-						fmt.Println("Error opening link:", err)
+						fmt.Printf("Error opening link: %v\n", err)
 						continue
 					}
 					break
 				}
 
-				// Wait before checking the next meeting
+				// Wait for a minute to avoid starting the meeting more than once in the same minute
 				time.Sleep(time.Minute)
 			}
 		}
 
-		// Sleep until the next check time
+		// Sleep for a while but wake up before a minute has passed
 		time.Sleep(20 * time.Second)
 	}
 }
