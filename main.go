@@ -38,7 +38,7 @@ func loadMeetings(filePath string) ([]Meeting, error) {
 
 // notifyMeeting sends a notification for the given meeting
 func notifyMeeting(meeting Meeting) error {
-	err := beeep.Notify("GoMeet", "Your meeting link is set to launch shortly", "assets/information.png")
+	err := beeep.Notify("GoMeet", fmt.Sprintf("%s link is set to launch shortly", meeting.Topic), "assets/information.png")
 	if err != nil {
 		return fmt.Errorf("error sending notification: %w", err)
 	}

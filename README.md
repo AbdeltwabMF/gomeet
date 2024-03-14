@@ -1,6 +1,6 @@
 # gomeet
 
- GoMeet is designed to elevate productivity by seamlessly connecting you to meetings while eliminating the need to manually retrieve and open meeting links.
+GoMeet is designed to elevate productivity by seamlessly connecting you to meetings while eliminating the need to manually retrieve and open meeting links.
 
 ## Build Binary
 
@@ -43,7 +43,10 @@ This typically involves creating a `systemd` or `runit` service or adding an ent
 
 > [!IMPORTANT]
 > Ensure that the `meetings.json` file is placed in the config directory of your system:
-> On Unix systems, it returns `$XDG_CONFIG_HOME`, if non-empty, else `$HOME/.config`.
-> On Darwin, it returns `$HOME/Library/Application Support`.
-> On Windows, it returns `%AppData%` (i.e. `C:\Users\User\AppData\Roaming\`).
-> On Plan 9, it returns `$home/lib`.
+> On Windows, it's `%AppData%` (i.e. `C:\Users\User\AppData\Roaming\`).
+> On Darwin, it's `$HOME/Library/Application Support`.
+> On Unix systems, it's `$XDG_CONFIG_HOME`, if non-empty, else `$HOME/.config`.
+
+## License
+
+Licensed under the GPL-v3 [License](LICENSE).
