@@ -15,25 +15,30 @@ import (
 
 type Meeting struct {
 	Topic string   `json:"topic"`
-	Link  string   `json:"link"`
+	Url   string   `json:"url"`
 	When  string   `json:"when"`
 	Days  []string `json:"days"`
 }
 
-// loadMeetings loads meetings from the given JSON file
-func loadMeetings(filePath string) ([]Meeting, error) {
+type Config struct {
+	AutoStart bool      `json:"auto_start"`
+	Meetings  []Meeting `json:"meetings"`
+}
+
+// Loads configurations from the specified file path and returns a Config instance
+func loadConfig(filePath string) (*Config, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("error opening JSON file: %w", err)
+		return nil, err
 	}
 	defer file.Close()
 
-	var meetings []Meeting
-	if err := json.NewDecoder(file).Decode(&meetings); err != nil {
-		return nil, fmt.Errorf("error decoding JSON file: %w", err)
+	var config Config
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		return nil, err
 	}
 
-	return meetings, nil
+	return &config, nil
 }
 
 // Sends a notification with the specified meeting topic and URL,
@@ -50,8 +55,8 @@ func notifyMeeting(topic string, url string) error {
 	return notification.Push()
 }
 
-// openMeetingLink opens the meeting link in the default web browser
-func openMeetingLink(url string) error {
+// Opens the specified URL in the default web browser
+func openUrl(url string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
@@ -67,19 +72,17 @@ func openMeetingLink(url string) error {
 func main() {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
-		log.Fatalf("Error finding config directory: %v\n", err)
+		log.Fatal(err)
 	}
 
-	meetings, err := loadMeetings(filepath.Join(configDir, "meetings.json"))
+	config, err := loadConfig(filepath.Join(configDir, "meetings.json"))
 	if err != nil {
-		log.Fatalln(err)
+		log.Fatal(err)
 	}
 
 	for {
 		now := time.Now()
-		for _, meeting := range meetings {
-			fmt.Printf("%s when %s\n", meeting.Topic, meeting.When)
-
+		for _, meeting := range config.Meetings {
 			// Continue if today is not a working day
 			isWorkingDay := func() bool {
 				for _, weekday := range meeting.Days {
@@ -94,9 +97,9 @@ func main() {
 				continue
 			}
 
-			meetingTime, err := time.Parse("15:04", meeting.When)
+			when, err := time.Parse("15:04", meeting.When)
 			if err != nil {
-				fmt.Printf("Error parsing time: %v\n", err)
+				fmt.Println(err)
 				continue
 			}
 
@@ -106,16 +109,13 @@ func main() {
 					fmt.Println(err)
 				}
 
-				// Retry opening the link if failed
-				for i := 0; i < 100; i++ {
-					if err := openMeetingLink(meeting.Link); err != nil {
-						fmt.Printf("Error opening link: %v\n", err)
-						continue
+				if config.AutoStart {
+					if err := openUrl(meeting.Url); err != nil {
+						fmt.Println(err)
 					}
-					break
 				}
 
-				// Wait for a minute to avoid starting the meeting more than once in the same minute
+				// Prevents checking the meeting more than once in the same minute
 				time.Sleep(time.Minute)
 			}
 		}
