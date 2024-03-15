@@ -10,7 +10,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/gen2brain/beeep"
+	"github.com/go-toast/toast"
 )
 
 type Meeting struct {
@@ -36,13 +36,18 @@ func loadMeetings(filePath string) ([]Meeting, error) {
 	return meetings, nil
 }
 
-// notifyMeeting sends a notification for the given meeting
-func notifyMeeting(meeting Meeting) error {
-	err := beeep.Notify("GoMeet", fmt.Sprintf("%s link is set to launch shortly", meeting.Topic), "assets/information.png")
-	if err != nil {
-		return fmt.Errorf("error sending notification: %w", err)
+// Sends a notification with the specified meeting topic and URL,
+// allowing users to directly open the meeting from the notification
+func notifyMeeting(topic string, url string) error {
+	notification := toast.Notification{
+		AppID:    "gomeet",
+		Title:    "Join Meeting: " + topic,
+		Message:  "Click to join the meeting now.",
+		Actions:  []toast.Action{{Type: "protocol", Label: "Join", Arguments: url}},
+		Duration: toast.Long,
 	}
-	return nil
+
+	return notification.Push()
 }
 
 // openMeetingLink opens the meeting link in the default web browser
@@ -95,9 +100,9 @@ func main() {
 				continue
 			}
 
-			// If it's the same hour and minute, attempt to start the meeting
-			if now.Hour() == meetingTime.Hour() && now.Minute() == meetingTime.Minute() {
-				if err := notifyMeeting(meeting); err != nil {
+			// If the current time matches the [when], attempt to start the meeting
+			if now.Hour() == when.Hour() && now.Minute() == when.Minute() {
+				if err := notifyMeeting(meeting.Topic, meeting.Url); err != nil {
 					fmt.Println(err)
 				}
 
