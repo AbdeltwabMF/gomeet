@@ -1,26 +1,36 @@
-# gomeet
+<h1 align="center">gomeet</h1>
 
-GoMeet is designed to elevate productivity by seamlessly connecting you to meetings while eliminating the need to manually retrieve and open meeting links.
+<p align="center">A meeting reminder and auto-joiner, eliminating the need for manual work to store, retrieve, and open links</p>
 
-## Build Binary
+## Build
+
+Ensure you have the Go programming language installed, preferably version go1.22.1 or later.
 
 On windows:
 
 ```shell
-go build -o bin/gomeet.exe -ldflags "-H windowsgui" main.go
+go build -o bin/gomeet.exe -ldflags "-H windowsgui -s -w" main.go
 ```
 
 On Unix-based Systems:
 
 ```shell
-go build -o bin/gomeet main.go
+go build -o bin/gomeet -ldflags "-s -w" main.go
 ```
 
 ## Usage
 
-You have two options for running it: either on a per-usage basis or by adding the service to startup through the registry editor.
+Before using gomeet, create your own `meetings.json` file containing meeting data and configurations, such as whether to start meetings automatically or not. You can join meetings by clicking the notification.
 
-### Per-Usage Basis
+> [!IMPORTANT]
+> Ensure that the `meetings.json` file is placed in the config directory of your system:
+> On Windows, it's `%AppData%` (i.e. `C:\Users\User\AppData\Roaming\`).
+> On Darwin, it's `$HOME/Library/Application Support`.
+> On Unix systems, it's `$XDG_CONFIG_HOME`, if non-empty, else `$HOME/.config`.
+
+Once `meetings.json` is set up, you have two options for running gomeet:
+
+### 1. Per-Usage Basis
 
 Simply execute the built binary to start the daemon in the background.
 
@@ -28,7 +38,7 @@ Simply execute the built binary to start the daemon in the background.
 ./bin/gomeet.exe &
 ```
 
-### Startup as Background Service
+### 2. Startup as Service
 
 On windows, to have `gomeet` start automatically on startup, follow these steps:
 
@@ -40,12 +50,6 @@ On windows, to have `gomeet` start automatically on startup, follow these steps:
 
 On Unix-based systems, you'll need to perform further research on how to set up gomeet to start automatically on system startup.
 This typically involves creating a `systemd` or `runit` service or adding an entry to the appropriate startup configuration file for your distribution.
-
-> [!IMPORTANT]
-> Ensure that the `meetings.json` file is placed in the config directory of your system:
-> On Windows, it's `%AppData%` (i.e. `C:\Users\User\AppData\Roaming\`).
-> On Darwin, it's `$HOME/Library/Application Support`.
-> On Unix systems, it's `$XDG_CONFIG_HOME`, if non-empty, else `$HOME/.config`.
 
 ## License
 
