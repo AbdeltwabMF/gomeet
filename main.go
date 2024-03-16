@@ -9,8 +9,6 @@ import (
 	"path/filepath"
 	"runtime"
 	"time"
-
-	"github.com/go-toast/toast"
 )
 
 type Meeting struct {
@@ -41,29 +39,8 @@ func loadConfig(filePath string) (*Config, error) {
 	return &config, nil
 }
 
-// Sends a notification with the specified meeting topic and URL,
-// allowing users to directly open the meeting from the notification
-func notifyMeeting(topic string, url string) error {
-	switch runtime.GOOS {
-	case "windows":
-		notification := toast.Notification{
-			AppID:    "gomeet",
-			Title:    "Join Meeting: " + topic,
-			Message:  "Click to join the meeting now.",
-			Actions:  []toast.Action{{Type: "protocol", Label: "Join", Arguments: url}},
-			Duration: toast.Long,
-		}
-
-		return notification.Push()
-	case "darwin":
-		return nil
-	default:
-		return nil
-	}
-}
-
 // Opens the specified URL in the default web browser
-func openUrl(url string) error {
+func openURL(url string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "windows":
@@ -117,7 +94,7 @@ func main() {
 				}
 
 				if config.AutoStart {
-					if err := openUrl(meeting.Url); err != nil {
+					if err := openURL(meeting.Url); err != nil {
 						fmt.Println(err)
 					}
 				}

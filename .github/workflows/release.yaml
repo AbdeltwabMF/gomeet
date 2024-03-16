@@ -18,7 +18,7 @@ jobs:
         os:
         - 'windows-latest'
         go-version:
-        - '1.22'
+        - '1.22.x'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -44,7 +44,7 @@ jobs:
         - 'windows-latest'
         - 'macos-latest'
         go-version:
-        - '1.22'
+        - '1.22.x'
         # List of GOOS and GOARCH pairs from `go tool dist list`
         goosarch:
           - linux/amd64
