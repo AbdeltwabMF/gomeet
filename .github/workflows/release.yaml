@@ -74,6 +74,9 @@ jobs:
           GOOS=${GOOSARCH%/*}
           GOARCH=${GOOSARCH#*/}
           BINARY_NAME=$(basename $GITHUB_REPOSITORY)-$GOOS-$GOARCH
+          if [[ "$GOOS" == "windows" ]]; then
+            BINARY_NAME=$BINARY_NAME.exe
+          fi
           echo "BINARY_NAME=$BINARY_NAME" | tee -a $GITHUB_ENV
           echo "GOOS=$GOOS" | tee -a $GITHUB_ENV
           echo "GOARCH=$GOARCH" | tee -a $GITHUB_ENV
