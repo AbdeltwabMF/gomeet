@@ -1,6 +1,6 @@
 module main
 
-go 1.22.1
+go 1.22
 
 require (
 	github.com/go-toast/toast v0.0.0-20190211030409-01e6764cf0a4 // direct
