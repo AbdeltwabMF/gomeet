@@ -35,6 +35,7 @@ jobs:
           args: --timeout=30m
 
   release:
+    permissions: write-all
     runs-on: ${{ matrix.os }}
     needs: lint
     strategy:
@@ -85,7 +86,7 @@ jobs:
       - name: Release with Notes
         uses: ncipollo/release-action@v1
         with:
-          artifacts: ${{ env.BINARY_NAME }}
+          artifacts: "$BINARY_NAME"
           name: ${{ github.ref_name }}
           makeLatest: true
           generateReleaseNotes: true
