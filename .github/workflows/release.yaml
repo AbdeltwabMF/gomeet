@@ -73,7 +73,7 @@ jobs:
           GOOSARCH=${{ matrix.goosarch }}
           GOOS=${GOOSARCH%/*}
           GOARCH=${GOOSARCH#*/}
-          BINARY_NAME=$(basename ${ github.repository })-$GOOS-$GOARCH
+          BINARY_NAME=$(basename $GITHUB_REPOSITORY)-$GOOS-$GOARC
           echo "BINARY_NAME=$BINARY_NAME" | tee -a $GITHUB_ENV
           echo "GOOS=$GOOS" | tee -a $GITHUB_ENV
           echo "GOARCH=$GOARCH" | tee -a $GITHUB_ENV
