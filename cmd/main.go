@@ -65,7 +65,7 @@ func initLogger() (*os.File, error) {
 	return file, nil
 }
 
-func meetingMatch(meeting Meeting) bool {
+func matchMeeting(meeting Meeting) bool {
 	now := time.Now()
 
 	for _, wDay := range meeting.Days {
@@ -77,6 +77,7 @@ func meetingMatch(meeting Meeting) bool {
 			}
 
 			// If the current time matches the [when], attempt to start the meeting
+			slog.Info(fmt.Sprintf("Matching %s", meeting.Topic), slog.String("parsed_time", when.String()))
 			if now.Hour() == when.Hour() && now.Minute() == when.Minute() {
 				return true
 			} else {
@@ -104,7 +105,7 @@ func main() {
 
 	for {
 		for _, meeting := range config.Meetings {
-			if meetingMatch(meeting) {
+			if matchMeeting(meeting) {
 				if err := platform.NotifyMeeting(meeting.Topic, meeting.Url); err != nil {
 					slog.Error(err.Error())
 				}
@@ -112,12 +113,17 @@ func main() {
 				if config.AutoStart {
 					if err := platform.OpenURL(meeting.Url); err != nil {
 						slog.Error(err.Error())
+					} else {
+						slog.Info(fmt.Sprintf("%s started", meeting.Topic), slog.String("at", time.Now().String()))
 					}
 				}
 			}
 		}
 
-		// Wait till the next minute
-		time.Sleep(time.Minute - time.Duration(time.Now().Second()))
+		// Wait until the next minute to start the next iteration of meetings
+		// This ensures that we are checking meetings at the beginning of each minute
+		st := time.Minute - time.Duration(time.Now().Second())*time.Second
+		slog.Info("Sleeping until the next minute", slog.String("sleep_time", st.String()))
+		time.Sleep(st)
 	}
 }
