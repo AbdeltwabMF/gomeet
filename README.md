@@ -4,31 +4,37 @@
 
 ## Build
 
-Ensure you have the Go programming language installed, preferably version go1.22.1 or later.
+Ensure you have the Go programming language installed, preferably version `go1.22.1` or later.
 
 On windows:
 
 ```shell
-go build -o bin/gomeet.exe -ldflags "-H windowsgui -s -w" main.go
+go build -o bin/gomeet.exe -ldflags "-H windowsgui -s -w" ./cmd
 ```
 
 On Unix-based Systems:
 
 ```shell
-go build -o bin/gomeet -ldflags "-s -w" main.go
+go build -o bin/gomeet -ldflags "-s -w" ./cmd
 ```
 
 ## Usage
 
-Before using gomeet, create your own `meetings.json` file containing meeting data and configurations, such as whether to start meetings automatically or not. You can join meetings by clicking the notification.
+Before using `gomeet`, ensure that the `config.json` file is populated with your own data in a valid JSON format (see `config.json`).
 
 > [!IMPORTANT]
-> Ensure that the `meetings.json` file is placed in the config directory of your system:
-> On Windows, it's `%AppData%` (i.e. `C:\Users\User\AppData\Roaming\`).
-> On Darwin, it's `$HOME/Library/Application Support`.
-> On Unix systems, it's `$XDG_CONFIG_HOME`, if non-empty, else `$HOME/.config`.
+> The `config.json` file is placed in the configuration directory of your system:
+>
+> - Windows: it's `%AppData%` (i.e. `C:\Users\<user-name>\AppData\Roaming\gomeet\`).
+> - Darwin: it's `$HOME/Library/Application Support/gomeet`.
+> - Gnu/Linux: it's `$XDG_CONFIG_HOME`, if non-empty, else `$HOME/.config/gomeet`.
 
-Once `meetings.json` is set up, you have two options for running gomeet:
+`gomeet` logs important events such as errors or warnings to a log file. You can refer to this log file in case of any issues.
+
+- Windows: `%LocalAppData%\gomeet\logs\` or `C:\Users\<user-name>\AppData\Local\gomeet\logs`.
+- Darwin: `~/Library/Logs/gomeet/`.
+- Gnu/Linux: `/var/log/gomeet/`
+
 
 ### 1. Per-Usage Basis
 
@@ -48,7 +54,7 @@ On windows, to have `gomeet` start automatically on startup, follow these steps:
 4. Name the new value as `GoMeet`.
 5. Double-click the new value and set its data to the full path of the `gomeet` executable. For example: `C:\bin\gomeet.exe`.
 
-On Unix-based systems, you'll need to perform further research on how to set up gomeet to start automatically on system startup.
+On Unix-based systems, you'll need to perform further research on how to set up `gomeet` to start automatically on system startup.
 This typically involves creating a `systemd` or `runit` service or adding an entry to the appropriate startup configuration file for your distribution.
 
 ## License
