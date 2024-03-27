@@ -12,7 +12,10 @@ import (
 	"github.com/go-toast/toast"
 )
 
-// NotifyMeeting sends actionable notification with the specified meeting topic and URL
+const (
+	ToolName = "gomeet"
+)
+
 func NotifyMeeting(topic string, url string) error {
 	notification := toast.Notification{
 		AppID:    "gomeet",
@@ -25,23 +28,35 @@ func NotifyMeeting(topic string, url string) error {
 	return notification.Push()
 }
 
-// OpenURL opens the specified URL in the default web browser
 func OpenURL(url string) error {
 	cmd := exec.Command("cmd", "/c", "start", url)
 	return cmd.Run()
 }
 
-// LogDir returns the application-specific log directory
 func LogDir() (string, error) {
-	appDataDir := os.Getenv("LOCALAPPDATA")
-	if appDataDir == "" {
+	d := os.Getenv("LOCALAPPDATA")
+	if d == "" {
 		return "", fmt.Errorf("'LOCALAPPDATA' is not defined in the environment variables")
 	}
 
-	logDir := filepath.Join(appDataDir, "gomeet", "logs")
-	if err := os.MkdirAll(logDir, 0750); err != nil {
+	tDir := filepath.Join(d, ToolName, "logs")
+	if err := os.MkdirAll(tDir, 0750); err != nil {
 		return "", err
 	}
 
-	return logDir, nil
+	return tDir, nil
+}
+
+func ConfigDir() (string, error) {
+	c, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+
+	tDir := filepath.Join(c, ToolName)
+	if err := os.MkdirAll(tDir, 0750); err != nil {
+		return "", err
+	}
+
+	return tDir, nil
 }

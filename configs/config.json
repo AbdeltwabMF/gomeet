@@ -1,0 +1,21 @@
+{
+  "auto_start": true,
+  "events": [
+    {
+      "summary": "Standup Meeting",
+      "url": "https://us04web.zoom.us/j/77774689468?pwd=Lb883c3ZsRNikUvErHASaiSvHGUTer.1",
+      "start": {
+        "time": "11:00",
+        "days": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"]
+      }
+    },
+    {
+      "summary": "Catchup Meeting",
+      "url": "https://us04web.zoom.us/j/77774989498?pwd=Lb998c3ZsRNikUvErHASaiSvHGUTer.1",
+      "start": {
+        "time": "15:00",
+        "days": ["Sunday"]
+      }
+    }
+  ]
+}
