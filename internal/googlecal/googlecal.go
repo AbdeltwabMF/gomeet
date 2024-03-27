@@ -155,7 +155,10 @@ func FetchEvents(c chan<- *calendar.Events) {
 
 		c <- events
 		st := time.Until(tNow.Truncate(time.Hour).Add(time.Hour))
-		slog.Info("Wait until the beginning of the next hour", slog.String("time.sleep", st.String()), slog.String("calendar", "google calendar"))
+		slog.Info("Wait until the beginning of the next hour",
+			slog.String("time.sleep", st.String()),
+			slog.String("calendar", "google calendar"),
+		)
 		time.Sleep(st)
 	}
 }

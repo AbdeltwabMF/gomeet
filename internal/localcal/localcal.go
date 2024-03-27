@@ -2,7 +2,6 @@ package localcal
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -49,14 +48,20 @@ func LoadEvents(c chan []Event) {
 
 		c <- cal.Events
 		st := time.Until(time.Now().Truncate(time.Hour).Add(time.Hour))
-		slog.Info("Wait until the beginning of the next hour", slog.String("time.sleep", st.String()), slog.String("calendar", "local"))
+		slog.Info("Wait until the beginning of the next hour",
+			slog.String("time.sleep", st.String()),
+			slog.String("calendar", "local"),
+		)
 		time.Sleep(st)
 	}
 }
 
 func Match(event Event) bool {
 	now := time.Now()
-	slog.Info("Matching local calendar event", slog.String("event.time", event.Start.Time), slog.String("now.time", now.Format("15:04")))
+	slog.Info("Matching local calendar event",
+		slog.String("event.time", event.Start.Time),
+		slog.String("now.time", now.Format("15:04")),
+	)
 
 	for _, d := range event.Start.Days {
 		if d == now.Weekday().String() {
@@ -67,16 +72,13 @@ func Match(event Event) bool {
 	return false
 }
 
-func Execute(event Event, autoStart bool) {
+func Execute(event Event, autoStart bool) error {
 	if err := platform.NotifyMeeting(event.Summary, event.Url); err != nil {
 		slog.Error(err.Error())
 	}
 
 	if autoStart {
-		if err := platform.OpenURL(event.Url); err != nil {
-			slog.Error(err.Error())
-		} else {
-			slog.Info(fmt.Sprintf("%s started", event.Summary), slog.String("at", time.Now().String()))
-		}
+		return platform.OpenURL(event.Url)
 	}
+	return nil
 }

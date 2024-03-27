@@ -92,10 +92,18 @@ func main() {
 			case gEvents = <-gc:
 				slog.Info("Google calendar channel is ready")
 			default:
-				for i, item := range gEvents.Items {
-					fmt.Printf("%d. %v %v (%s)\n", i, item.Summary, item.Start.DateTime, item.Location)
-					if googlecal.Match(*item) {
-						googlecal.Execute(*item, cfg.AutoStart)
+				for _, item := range gEvents.Items {
+					ok, err := googlecal.Match(*item)
+					if err != nil {
+						slog.Error(err.Error())
+						continue
+					}
+
+					if ok {
+						err := googlecal.Execute(*item, cfg.AutoStart)
+						if err != nil {
+							slog.Error(err.Error())
+						}
 					}
 				}
 				waitMin()
@@ -109,10 +117,12 @@ func main() {
 			case lEvents = <-lc:
 				slog.Info("Local calendar channel is ready")
 			default:
-				for i, item := range lEvents {
-					fmt.Printf("%d. %v %v (%s)\n", i, item.Summary, item.Start.Time, item.Url)
+				for _, item := range lEvents {
 					if localcal.Match(item) {
-						localcal.Execute(item, cfg.AutoStart)
+						err := localcal.Execute(item, cfg.AutoStart)
+						if err != nil {
+							slog.Error(err.Error())
+						}
 					}
 				}
 				waitMin()
