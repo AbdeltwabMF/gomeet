@@ -21,8 +21,7 @@ import (
 
 const TokenFile = "token.json"
 const CredentialsFile = "credentials.json"
-const TCPPort = "8080"
-const GoogleCalendar = "Google calendar"
+const CalendarName = "Google calendar"
 
 func authorizeAccess(cfg *oauth2.Config) (*oauth2.Token, error) {
 	authzURL := cfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
@@ -34,10 +33,15 @@ func authorizeAccess(cfg *oauth2.Config) (*oauth2.Token, error) {
 	}
 
 	c := make(chan *oauth2.Token)
-	http.HandleFunc("/oauth2callback", func(w http.ResponseWriter, req *http.Request) {
+	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		handleOAuthCallback(c, w, req, cfg)
 	})
-	go http.ListenAndServe(fmt.Sprintf(":%s", TCPPort), nil)
+
+	go func() {
+		if err := http.ListenAndServe("", nil); err != nil {
+			slog.Error(err.Error())
+		}
+	}()
 
 	d, err := platform.ConfigDir()
 	if err != nil {
@@ -71,12 +75,6 @@ func saveToken(path string, tok *oauth2.Token) error {
 
 func handleOAuthCallback(c chan<- *oauth2.Token, w http.ResponseWriter, req *http.Request, cfg *oauth2.Config) {
 	qv := req.URL.Query()
-
-	if state := qv.Get("state"); state != "state-token\\" {
-		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
-		return
-	}
-
 	code := qv.Get("code")
 	if code == "" {
 		http.Error(w, "Missing code parameter", http.StatusBadRequest)
@@ -129,16 +127,15 @@ func initService() (*calendar.Service, error) {
 
 // Fetch fetches calendar events and sends them through the provided channel.
 // It periodically fetches events, sleeping until the beginning of the next hour between fetches.
-func Fetch(c chan<- *calendar.Events) {
+func Fetch(ch chan<- *calendar.Events, errch chan<- error) {
 	srv, err := initService()
 	if err != nil {
-		slog.Error(err.Error())
+		errch <- err
 		return
 	}
 
 	for {
 		now := time.Now()
-
 		events, err := srv.Events.List("primary").
 			// From now
 			TimeMin(now.Format(time.RFC3339)).
@@ -151,14 +148,15 @@ func Fetch(c chan<- *calendar.Events) {
 			Do()
 
 		if err != nil {
-			slog.Error(err.Error())
+			errch <- err
+			return
 		}
 
-		c <- events
+		ch <- events
 		st := time.Until(now.Truncate(time.Hour).Add(time.Hour))
 		slog.Info("Wait until the beginning of the next hour",
 			slog.String("time.sleep", st.String()),
-			slog.String("calendar", GoogleCalendar),
+			slog.String("calendar", CalendarName),
 		)
 		time.Sleep(st)
 	}
@@ -176,7 +174,7 @@ func Match(event *calendar.Event) (bool, error) {
 	slog.Info("Matching event",
 		slog.String("event.time", t.Format("15:04")),
 		slog.String("now.time", now.Format("15:04")),
-		slog.String("calendar", GoogleCalendar),
+		slog.String("calendar", CalendarName),
 	)
 	return t.Format("15:04") == now.Format("15:04"), nil
 }

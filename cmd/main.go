@@ -61,6 +61,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	fmt.Fprintf(file, "\n---------- ---------- (%v) ---------- ----------\n", time.Now().Local().Format(time.RFC3339))
 	defer file.Close()
 
 	cfg, err := loadConfig()
@@ -69,35 +70,41 @@ func main() {
 		os.Exit(1)
 	}
 
-	var googleEvents *calendar.Events
-	var localEvents *localcal.Events
-	googleEventsChan := make(chan *calendar.Events)
-	localEventsChan := make(chan *localcal.Events)
+	var gevents *calendar.Events
+	var levents *localcal.Events
 
-	go googlecal.Fetch(googleEventsChan)
-	go localcal.Load(localEventsChan)
+	gch := make(chan *calendar.Events)
+	lch := make(chan *localcal.Events)
+	gerrch := make(chan error)
+	lerrch := make(chan error)
 
-	googleEvents = <-googleEventsChan
-	localEvents = <-localEventsChan
+	go googlecal.Fetch(gch, gerrch)
+	go localcal.Load(lch, lerrch)
 
 	// Monitor Google calendar events.
 	go func() {
+	loop:
 		for {
 			select {
-			case googleEvents = <-googleEventsChan:
-				slog.Info("Google calendar channel is ready")
+			case gevents = <-gch:
+				slog.Info("Read from Google calendar channel")
+			case err := <-gerrch:
+				slog.Error("Unable to fetch events: %v", err, slog.String("calendar", "Google calendar"))
+				break loop
 			default:
-				for _, item := range googleEvents.Items {
-					ok, err := googlecal.Match(item)
-					if err != nil {
-						slog.Error(err.Error())
-						continue
-					}
-
-					if ok {
-						err := googlecal.Execute(item, cfg.AutoStart)
+				if gevents != nil {
+					for _, item := range gevents.Items {
+						matched, err := googlecal.Match(item)
 						if err != nil {
 							slog.Error(err.Error())
+							continue
+						}
+
+						if matched {
+							err := googlecal.Execute(item, cfg.AutoStart)
+							if err != nil {
+								slog.Error(err.Error())
+							}
 						}
 					}
 				}
@@ -114,16 +121,22 @@ func main() {
 
 	// Monitor local calendar events.
 	go func() {
+	loop:
 		for {
 			select {
-			case localEvents = <-localEventsChan:
-				slog.Info("Local calendar channel is ready")
+			case levents = <-lch:
+				slog.Info("Read from Local calendar channel")
+			case err := <-lerrch:
+				slog.Error("Unable to load events: %v", err, slog.String("calendar", "Local calendar"))
+				break loop
 			default:
-				for _, item := range localEvents.Items {
-					if localcal.Match(item) {
-						err := localcal.Execute(item, cfg.AutoStart)
-						if err != nil {
-							slog.Error(err.Error())
+				if levents != nil {
+					for _, item := range levents.Items {
+						if localcal.Match(item) {
+							err := localcal.Execute(item, cfg.AutoStart)
+							if err != nil {
+								slog.Error(err.Error())
+							}
 						}
 					}
 				}
