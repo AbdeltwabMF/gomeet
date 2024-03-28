@@ -18,34 +18,38 @@ var (
 	ErrNotImpl = errors.New("not implemented on Linux platform")
 )
 
-func NotifyMeeting(summary string, url string) error {
+// Notify sends a meeting notification with the specified summary and URL.
+func Notify(summary string, url string) error {
 	return ErrNotImpl
 }
 
+// OpenURL opens the specified URL in the default web browser.
 func OpenURL(url string) error {
 	cmd := exec.Command("xdg-open", url)
 	return cmd.Run()
 }
 
+// LogDir returns the directory path for storing logs related to the tool.
 func LogDir() (string, error) {
-	tDir := filepath.Join("/", "var", "log", ToolName)
-	if err := os.MkdirAll(tDir, 0750); err != nil {
+	d := filepath.Join("/", "var", "log", ToolName)
+	if err := os.MkdirAll(d, 0750); err != nil {
 		return "", err
 	}
 
-	return tDir, nil
+	return d, nil
 }
 
+// ConfigDir returns the directory path for storing configuration files related to the tool.
 func ConfigDir() (string, error) {
 	c, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
 
-	tDir := filepath.Join(c, ToolName)
-	if err := os.MkdirAll(tDir, 0750); err != nil {
+	d := filepath.Join(c, ToolName)
+	if err := os.MkdirAll(d, 0750); err != nil {
 		return "", err
 	}
 
-	return tDir, nil
+	return d, nil
 }

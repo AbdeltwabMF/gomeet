@@ -27,7 +27,8 @@ type Events struct {
 	Items []*Event `json:"events"`
 }
 
-func LoadEvents(c chan *Events) {
+// Load loads events from the local calendar and sends them to the provided channel.
+func Load(c chan *Events) {
 	for {
 		d, err := platform.ConfigDir()
 		if err != nil {
@@ -58,6 +59,7 @@ func LoadEvents(c chan *Events) {
 	}
 }
 
+// Match checks if the given event matches the current time(hh:mm) and day.
 func Match(event *Event) bool {
 	now := time.Now()
 	slog.Info("Matching event",
@@ -75,8 +77,9 @@ func Match(event *Event) bool {
 	return false
 }
 
+// Execute executes actions associated with the given event, such as notifying and potentially starting a meeting.
 func Execute(event *Event, autoStart bool) error {
-	if err := platform.NotifyMeeting(event.Summary, event.Url); err != nil {
+	if err := platform.Notify(event.Summary, event.Url); err != nil {
 		slog.Error(err.Error())
 	}
 

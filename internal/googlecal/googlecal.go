@@ -127,9 +127,9 @@ func initService() (*calendar.Service, error) {
 	return calendar.NewService(ctx, option.WithHTTPClient(client))
 }
 
-// FetchEvents fetches calendar events and sends them through the provided channel.
-// It continuously fetches events, sleeping until the beginning of the next hour between fetches.
-func FetchEvents(c chan<- *calendar.Events) {
+// Fetch fetches calendar events and sends them through the provided channel.
+// It periodically fetches events, sleeping until the beginning of the next hour between fetches.
+func Fetch(c chan<- *calendar.Events) {
 	srv, err := initService()
 	if err != nil {
 		slog.Error(err.Error())
@@ -137,13 +137,13 @@ func FetchEvents(c chan<- *calendar.Events) {
 	}
 
 	for {
-		tNow := time.Now()
+		now := time.Now()
 
 		events, err := srv.Events.List("primary").
 			// From now
-			TimeMin(tNow.Format(time.RFC3339)).
+			TimeMin(now.Format(time.RFC3339)).
 			// Until end of the day
-			TimeMax(tNow.Truncate(24 * time.Hour).Add(24 * time.Hour).Format(time.RFC3339)).
+			TimeMax(now.Truncate(24 * time.Hour).Add(24 * time.Hour).Format(time.RFC3339)).
 			// Fetch only 7 events; assuming calendar is busy and there is an event every 10min
 			MaxResults(7).
 			SingleEvents(true).
@@ -155,7 +155,7 @@ func FetchEvents(c chan<- *calendar.Events) {
 		}
 
 		c <- events
-		st := time.Until(tNow.Truncate(time.Hour).Add(time.Hour))
+		st := time.Until(now.Truncate(time.Hour).Add(time.Hour))
 		slog.Info("Wait until the beginning of the next hour",
 			slog.String("time.sleep", st.String()),
 			slog.String("calendar", GoogleCalendar),
@@ -164,6 +164,7 @@ func FetchEvents(c chan<- *calendar.Events) {
 	}
 }
 
+// Match checks if the given event matches the current time(hh:mm).
 func Match(event *calendar.Event) (bool, error) {
 	now := time.Now()
 
@@ -180,8 +181,9 @@ func Match(event *calendar.Event) (bool, error) {
 	return t.Format("15:04") == now.Format("15:04"), nil
 }
 
+// Execute executes actions associated with the given event, such as notifying and potentially starting a meeting.
 func Execute(event *calendar.Event, autoStart bool) error {
-	if err := platform.NotifyMeeting(event.Summary, event.Location); err != nil {
+	if err := platform.Notify(event.Summary, event.Location); err != nil {
 		slog.Error(err.Error())
 	}
 

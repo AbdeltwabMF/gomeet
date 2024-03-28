@@ -74,12 +74,13 @@ func main() {
 	googleEventsChan := make(chan *calendar.Events)
 	localEventsChan := make(chan *localcal.Events)
 
-	go googlecal.FetchEvents(googleEventsChan)
-	go localcal.LoadEvents(localEventsChan)
+	go googlecal.Fetch(googleEventsChan)
+	go localcal.Load(localEventsChan)
 
 	googleEvents = <-googleEventsChan
 	localEvents = <-localEventsChan
 
+	// Monitor Google calendar events.
 	go func() {
 		for {
 			select {
@@ -111,6 +112,7 @@ func main() {
 		}
 	}()
 
+	// Monitor local calendar events.
 	go func() {
 		for {
 			select {
@@ -136,5 +138,6 @@ func main() {
 		}
 	}()
 
+	// Block indefinitely to keep the main goroutine running.
 	select {}
 }
