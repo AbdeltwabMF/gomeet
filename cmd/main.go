@@ -61,6 +61,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+	fmt.Fprintf(file, "\n---------- ---------- (%v) ---------- ----------\n", time.Now().Local().Format(time.RFC3339))
 	defer file.Close()
 
 	cfg, err := loadConfig()

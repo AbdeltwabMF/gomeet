@@ -37,7 +37,12 @@ func authorizeAccess(cfg *oauth2.Config) (*oauth2.Token, error) {
 	http.HandleFunc("/oauth2callback", func(w http.ResponseWriter, req *http.Request) {
 		handleOAuthCallback(c, w, req, cfg)
 	})
-	go http.ListenAndServe(fmt.Sprintf(":%s", TCPPort), nil)
+
+	go func() {
+		if err := http.ListenAndServe("", nil); err != nil {
+			slog.Error(err.Error())
+		}
+	}()
 
 	d, err := platform.ConfigDir()
 	if err != nil {
@@ -71,12 +76,6 @@ func saveToken(path string, tok *oauth2.Token) error {
 
 func handleOAuthCallback(c chan<- *oauth2.Token, w http.ResponseWriter, req *http.Request, cfg *oauth2.Config) {
 	qv := req.URL.Query()
-
-	if state := qv.Get("state"); state != "state-token\\" {
-		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
-		return
-	}
-
 	code := qv.Get("code")
 	if code == "" {
 		http.Error(w, "Missing code parameter", http.StatusBadRequest)
