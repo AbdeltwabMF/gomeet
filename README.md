@@ -4,10 +4,10 @@
 
 ## Configuration
 
-Before using `gomeet`, configure it with your details in a valid JSON format. You'll find an example configuration file (`config.json`) to get you started.
+Before using `gomeet`, configure it with your details in a valid JSON format. You'll find an example configuration file [config.json](configs/config.json) to get you started.
 
 > [!IMPORTANT]
-> The `config.json` file is placed in the configuration directory of your system:
+> The [config.json](configs/config.json) file is placed in the configuration directory of your system:
 >
 > - Windows: it's `%AppData%` (i.e. `C:\Users\<user-name>\AppData\Roaming\gomeet\`).
 > - Darwin: it's `$HOME/Library/Application Support/gomeet`.
@@ -15,19 +15,19 @@ Before using `gomeet`, configure it with your details in a valid JSON format. Yo
 
 ### Adding calendars
 
-**Local Calendar**: Include your local calendar details in the `"events"` array within `config.json`.
+**Local Calendar**: Include your local calendar details in the `"events"` array within [config.json](configs/config.json).
 
 **Google Calendar**:
 
 - [Create a Google Cloud project](https://developers.google.com/workspace/guides/create-project).
-- Generate a `credentials.json` file and place it alongside `config.json` in the gomeet config directory.
+- Generate a [credentials.json](configs/credentials.json) file and place it alongside [config.json](configs/config.json) in the gomeet config directory.
 
 >[!CAUTION]
 > Events are checked every hour. To include an event starting before the next check, restart gomeet.
 
 ## Build
 
-**Requirements**: Go programming language (version go1.22.1 or later recommended)
+**Requirements**: [Go programming language](https://go.dev/) (version go1.22.1 or later recommended)
 
 **Windows**:
 
