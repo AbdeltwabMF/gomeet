@@ -10,6 +10,8 @@ import (
 	"github.com/AbdeltwabMF/gomeet/internal/platform"
 )
 
+const LocalCalendar = "Local calendar"
+
 type Start struct {
 	Time string   `json:"time"`
 	Days []string `json:"days"`
@@ -21,11 +23,11 @@ type Event struct {
 	Start   Start  `json:"start"`
 }
 
-type Calendar struct {
-	Events []Event `json:"events"`
+type Events struct {
+	Items []*Event `json:"events"`
 }
 
-func LoadEvents(c chan []Event) {
+func LoadEvents(c chan *Events) {
 	for {
 		d, err := platform.ConfigDir()
 		if err != nil {
@@ -40,27 +42,28 @@ func LoadEvents(c chan []Event) {
 		}
 		defer file.Close()
 
-		var cal Calendar
-		if err := json.NewDecoder(file).Decode(&cal); err != nil {
+		var events Events
+		if err := json.NewDecoder(file).Decode(&events); err != nil {
 			slog.Error(err.Error())
 			return
 		}
 
-		c <- cal.Events
+		c <- &events
 		st := time.Until(time.Now().Truncate(time.Hour).Add(time.Hour))
 		slog.Info("Wait until the beginning of the next hour",
 			slog.String("time.sleep", st.String()),
-			slog.String("calendar", "local"),
+			slog.String("calendar", LocalCalendar),
 		)
 		time.Sleep(st)
 	}
 }
 
-func Match(event Event) bool {
+func Match(event *Event) bool {
 	now := time.Now()
-	slog.Info("Matching local calendar event",
+	slog.Info("Matching event",
 		slog.String("event.time", event.Start.Time),
 		slog.String("now.time", now.Format("15:04")),
+		slog.String("calendar", LocalCalendar),
 	)
 
 	for _, d := range event.Start.Days {
@@ -72,7 +75,7 @@ func Match(event Event) bool {
 	return false
 }
 
-func Execute(event Event, autoStart bool) error {
+func Execute(event *Event, autoStart bool) error {
 	if err := platform.NotifyMeeting(event.Summary, event.Url); err != nil {
 		slog.Error(err.Error())
 	}

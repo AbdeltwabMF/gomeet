@@ -55,12 +55,6 @@ func initLogger() (*os.File, error) {
 	return file, nil
 }
 
-func waitMin() {
-	st := time.Until(time.Now().Truncate(time.Minute).Add(time.Minute))
-	slog.Info("Done iteration; time to sleep", slog.String("sleep.time", st.String()))
-	time.Sleep(st)
-}
-
 func main() {
 	file, err := initLogger()
 	if err != nil {
@@ -75,38 +69,44 @@ func main() {
 		os.Exit(1)
 	}
 
-	var gEvents *calendar.Events
-	var lEvents []localcal.Event
-	gc := make(chan *calendar.Events)
-	lc := make(chan []localcal.Event)
+	var googleEvents *calendar.Events
+	var localEvents *localcal.Events
+	googleEventsChan := make(chan *calendar.Events)
+	localEventsChan := make(chan *localcal.Events)
 
-	go googlecal.FetchEvents(gc)
-	go localcal.LoadEvents(lc)
+	go googlecal.FetchEvents(googleEventsChan)
+	go localcal.LoadEvents(localEventsChan)
 
-	gEvents = <-gc
-	lEvents = <-lc
+	googleEvents = <-googleEventsChan
+	localEvents = <-localEventsChan
 
 	go func() {
 		for {
 			select {
-			case gEvents = <-gc:
+			case googleEvents = <-googleEventsChan:
 				slog.Info("Google calendar channel is ready")
 			default:
-				for _, item := range gEvents.Items {
-					ok, err := googlecal.Match(*item)
+				for _, item := range googleEvents.Items {
+					ok, err := googlecal.Match(item)
 					if err != nil {
 						slog.Error(err.Error())
 						continue
 					}
 
 					if ok {
-						err := googlecal.Execute(*item, cfg.AutoStart)
+						err := googlecal.Execute(item, cfg.AutoStart)
 						if err != nil {
 							slog.Error(err.Error())
 						}
 					}
 				}
-				waitMin()
+
+				st := time.Until(time.Now().Truncate(time.Minute).Add(time.Minute))
+				slog.Info("Done iteration; time to sleep",
+					slog.String("sleep.time", st.String()),
+					slog.String("calendar", "Google calendar"),
+				)
+				time.Sleep(st)
 			}
 		}
 	}()
@@ -114,10 +114,10 @@ func main() {
 	go func() {
 		for {
 			select {
-			case lEvents = <-lc:
+			case localEvents = <-localEventsChan:
 				slog.Info("Local calendar channel is ready")
 			default:
-				for _, item := range lEvents {
+				for _, item := range localEvents.Items {
 					if localcal.Match(item) {
 						err := localcal.Execute(item, cfg.AutoStart)
 						if err != nil {
@@ -125,7 +125,13 @@ func main() {
 						}
 					}
 				}
-				waitMin()
+
+				st := time.Until(time.Now().Truncate(time.Minute).Add(time.Minute))
+				slog.Info("Done iteration; time to sleep",
+					slog.String("sleep.time", st.String()),
+					slog.String("calendar", "Local calendar"),
+				)
+				time.Sleep(st)
 			}
 		}
 	}()

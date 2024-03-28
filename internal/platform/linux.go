@@ -18,7 +18,7 @@ var (
 	ErrNotImpl = errors.New("not implemented on Linux platform")
 )
 
-func NotifyMeeting(string, string) error {
+func NotifyMeeting(summary string, url string) error {
 	return ErrNotImpl
 }
 

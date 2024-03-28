@@ -16,10 +16,10 @@ const (
 	ToolName = "gomeet"
 )
 
-func NotifyMeeting(topic string, url string) error {
+func NotifyMeeting(summary string, url string) error {
 	notification := toast.Notification{
 		AppID:    "gomeet",
-		Title:    "Join Meeting: " + topic,
+		Title:    "Join Meeting: " + summary,
 		Message:  "Click to join the meeting now.",
 		Actions:  []toast.Action{{Type: "protocol", Label: "Join", Arguments: url}},
 		Duration: toast.Long,

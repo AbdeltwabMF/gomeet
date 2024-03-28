@@ -22,6 +22,7 @@ import (
 const TokenFile = "token.json"
 const CredentialsFile = "credentials.json"
 const TCPPort = "8080"
+const GoogleCalendar = "Google calendar"
 
 func authorizeAccess(cfg *oauth2.Config) (*oauth2.Token, error) {
 	authzURL := cfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
@@ -157,13 +158,13 @@ func FetchEvents(c chan<- *calendar.Events) {
 		st := time.Until(tNow.Truncate(time.Hour).Add(time.Hour))
 		slog.Info("Wait until the beginning of the next hour",
 			slog.String("time.sleep", st.String()),
-			slog.String("calendar", "google calendar"),
+			slog.String("calendar", GoogleCalendar),
 		)
 		time.Sleep(st)
 	}
 }
 
-func Match(event calendar.Event) (bool, error) {
+func Match(event *calendar.Event) (bool, error) {
 	now := time.Now()
 
 	t, err := time.Parse(time.RFC3339, event.Start.DateTime)
@@ -174,12 +175,12 @@ func Match(event calendar.Event) (bool, error) {
 	slog.Info("Matching event",
 		slog.String("event.time", t.Format("15:04")),
 		slog.String("now.time", now.Format("15:04")),
-		slog.String("calendar", "google calendar"),
+		slog.String("calendar", GoogleCalendar),
 	)
 	return t.Format("15:04") == now.Format("15:04"), nil
 }
 
-func Execute(event calendar.Event, autoStart bool) error {
+func Execute(event *calendar.Event, autoStart bool) error {
 	if err := platform.NotifyMeeting(event.Summary, event.Location); err != nil {
 		slog.Error(err.Error())
 	}
