@@ -16,7 +16,7 @@ jobs:
     strategy:
       matrix:
         os:
-        - 'ubuntu-latest'
+        - 'windows-latest'
         go-version:
         - '1.22.x'
     steps:
@@ -40,7 +40,7 @@ jobs:
     strategy:
       matrix:
         os:
-        - 'ubuntu-latest'
+        - 'windows-latest'
         go-version:
         - '1.22.x'
         # List of GOOS and GOARCH pairs from `go tool dist list`
