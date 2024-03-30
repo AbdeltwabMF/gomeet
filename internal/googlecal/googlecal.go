@@ -176,17 +176,13 @@ func Fetch(ch chan<- *calendar.Events, errch chan<- error) {
 		return
 	}
 
-	const (
-		maxEvents  = 7
-		hoursInDay = 24
-	)
-
 	for {
 		now := time.Now()
+		endofday := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
 		events, err := srv.Events.List("primary").
 			TimeMin(now.Format(time.RFC3339)).
-			TimeMax(now.Truncate(hoursInDay * time.Hour).Add(hoursInDay * time.Hour).Format(time.RFC3339)).
-			MaxResults(maxEvents).
+			TimeMax(endofday.Format(time.RFC3339)).
+			MaxResults(7).
 			SingleEvents(true).
 			OrderBy("startTime").
 			Do()
