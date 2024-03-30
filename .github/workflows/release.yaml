@@ -64,7 +64,7 @@ jobs:
           go-version: ${{ matrix.go-version }}
 
       - name: Display Go version
-        run: go version
+        run: make
 
       - name: Get OS and arch info
         run: |
@@ -72,16 +72,19 @@ jobs:
           GOOS=${GOOSARCH%/*}
           GOARCH=${GOOSARCH#*/}
           BINARY_NAME=$(basename $GITHUB_REPOSITORY)-$GOOS-$GOARCH
+          FLAGS="-s -w"
           if [[ "$GOOS" == "windows" ]]; then
             BINARY_NAME=$BINARY_NAME.exe
+            FLAGS="-H windowsgui -s -w"
           fi
           echo "BINARY_NAME=$BINARY_NAME" | tee -a $GITHUB_ENV
+          echo "FLAGS=$FLAGS" | tee -a $GITHUB_ENV
           echo "GOOS=$GOOS" | tee -a $GITHUB_ENV
           echo "GOARCH=$GOARCH" | tee -a $GITHUB_ENV
 
       - name: Build
         run: |
-          go build -o "$BINARY_NAME" -v -ldflags "-H windowsgui -s -w" ./cmd
+          go build -o "$BINARY_NAME" -v -ldflags "$FLAGS" ./cmd
 
       - name: Release Notes
         run:
