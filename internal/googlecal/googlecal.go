@@ -16,12 +16,11 @@ import (
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
 
+	"github.com/AbdeltwabMF/gomeet/configs"
 	"github.com/AbdeltwabMF/gomeet/internal/platform"
 )
 
-const TokenFile = "token.json"
-const CredentialsFile = "credentials.json"
-const CalendarName = "Google calendar"
+var CalAttr = slog.String("calendar", "Google")
 
 func authorizeAccess(cfg *oauth2.Config) (*oauth2.Token, error) {
 	authzURL := cfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
@@ -32,7 +31,7 @@ func authorizeAccess(cfg *oauth2.Config) (*oauth2.Token, error) {
 		return nil, err
 	}
 
-	c := make(chan *oauth2.Token)
+	c := make(chan *oauth2.Token, 2)
 	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
 		handleOAuthCallback(c, w, req, cfg)
 	})
@@ -49,7 +48,7 @@ func authorizeAccess(cfg *oauth2.Config) (*oauth2.Token, error) {
 	}
 
 	tok := <-c
-	return tok, saveToken(filepath.Join(d, TokenFile), tok)
+	return tok, saveToken(filepath.Join(d, configs.TokenFile), tok)
 }
 
 func loadToken(path string) (*oauth2.Token, error) {
@@ -100,7 +99,7 @@ func initService() (*calendar.Service, error) {
 		return nil, err
 	}
 
-	bytes, err := os.ReadFile(filepath.Join(c, CredentialsFile))
+	bytes, err := os.ReadFile(filepath.Join(c, configs.CredentialsFile))
 	if err != nil {
 		return nil, err
 	}
@@ -111,7 +110,7 @@ func initService() (*calendar.Service, error) {
 		return nil, err
 	}
 
-	tok, err := loadToken(filepath.Join(c, TokenFile))
+	tok, err := loadToken(filepath.Join(c, configs.TokenFile))
 	if err != nil {
 		slog.Error(err.Error())
 
@@ -125,20 +124,52 @@ func initService() (*calendar.Service, error) {
 	return calendar.NewService(ctx, option.WithHTTPClient(client))
 }
 
-func waitNextHour() {
-	sd := time.Until(time.Now().Truncate(time.Hour).Add(time.Hour))
+func waitNextMinute() {
+	time.Sleep(time.Until(time.Now().Truncate(time.Minute).Add(time.Minute)))
+}
 
-	slog.Info("Waiting for the next hour to refetch events",
-		slog.String("time.sleep", sd.String()),
-		slog.String("calendar", CalendarName),
-	)
+func Monitor(cfg *configs.Config) {
+	var events *calendar.Events
+	c := make(chan *calendar.Events, 2)
+	errc := make(chan error, 2)
 
-	time.Sleep(sd)
+	go Fetch(c, errc)
+
+	for {
+		select {
+		case events = <-c:
+			slog.Info("Received events", slog.Int("events.count", len(events.Items)), CalAttr)
+		case err := <-errc:
+			slog.Error(fmt.Sprintf("Received error: %v", err), CalAttr)
+			go func() {
+				waitNextMinute()
+				Fetch(c, errc)
+			}()
+		default:
+			if events != nil {
+				for _, item := range events.Items {
+					matched, err := Match(item)
+					if err != nil {
+						slog.Error(err.Error())
+						continue
+					}
+
+					if matched {
+						err := Execute(item, cfg.AutoStart)
+						if err != nil {
+							slog.Error(fmt.Sprintf("Execute: %v", err.Error()), CalAttr)
+						}
+					}
+				}
+			}
+			waitNextMinute()
+		}
+	}
 }
 
 // Fetch fetches calendar events and sends them through the provided channel.
 // It periodically fetches events, sleeping until the beginning of the next hour between fetches.
-func Fetch(ch chan<- *calendar.Events, errch chan<- error, retryLimit int) {
+func Fetch(ch chan<- *calendar.Events, errch chan<- error) {
 	srv, err := initService()
 	if err != nil {
 		errch <- err
@@ -152,21 +183,13 @@ func Fetch(ch chan<- *calendar.Events, errch chan<- error, retryLimit int) {
 
 	for {
 		now := time.Now()
-		var events *calendar.Events
-
-		for i := 0; i < retryLimit; i++ {
-			events, err = srv.Events.List("primary").
-				TimeMin(now.Format(time.RFC3339)).
-				TimeMax(now.Truncate(hoursInDay * time.Hour).Add(hoursInDay * time.Hour).Format(time.RFC3339)).
-				MaxResults(maxEvents).
-				SingleEvents(true).
-				OrderBy("startTime").
-				Do()
-
-			if err == nil {
-				break
-			}
-		}
+		events, err := srv.Events.List("primary").
+			TimeMin(now.Format(time.RFC3339)).
+			TimeMax(now.Truncate(hoursInDay * time.Hour).Add(hoursInDay * time.Hour).Format(time.RFC3339)).
+			MaxResults(maxEvents).
+			SingleEvents(true).
+			OrderBy("startTime").
+			Do()
 
 		if err != nil {
 			errch <- err
@@ -174,7 +197,7 @@ func Fetch(ch chan<- *calendar.Events, errch chan<- error, retryLimit int) {
 		}
 
 		ch <- events
-		waitNextHour()
+		waitNextMinute()
 	}
 }
 
@@ -187,10 +210,10 @@ func Match(event *calendar.Event) (bool, error) {
 		return false, err
 	}
 
-	slog.Info("Matching event",
+	slog.Info("Match",
 		slog.String("event.time", t.Format("15:04")),
 		slog.String("now.time", now.Format("15:04")),
-		slog.String("calendar", CalendarName),
+		CalAttr,
 	)
 
 	return t.Format("15:04") == now.Format("15:04"), nil

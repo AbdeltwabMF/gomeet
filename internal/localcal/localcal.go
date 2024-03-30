@@ -2,51 +2,64 @@ package localcal
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/AbdeltwabMF/gomeet/configs"
 	"github.com/AbdeltwabMF/gomeet/internal/platform"
 )
 
-const CalendarName = "Local calendar"
+var CalAttr = slog.String("calendar", "Local")
 
-type Start struct {
-	Time string   `json:"time"`
-	Days []string `json:"days"`
+func waitNextMinute() {
+	time.Sleep(time.Until(time.Now().Truncate(time.Minute).Add(time.Minute)))
 }
 
-type Event struct {
-	Summary string `json:"summary"`
-	Url     string `json:"url"`
-	Start   Start  `json:"start"`
-}
+func Monitor(cfg *configs.Config) {
+	var events *configs.Events
+	c := make(chan *configs.Events, 2)
+	errc := make(chan error, 2)
 
-type Events struct {
-	Items []*Event `json:"events"`
-}
+	go Load(c, errc)
 
-func waitNextHour() {
-	sd := time.Until(time.Now().Truncate(time.Hour).Add(time.Hour))
-
-	slog.Info("Waiting for the next hour to reload events",
-		slog.String("time.sleep", sd.String()),
-		slog.String("calendar", CalendarName),
-	)
-
-	time.Sleep(sd)
+	for {
+		select {
+		case events = <-c:
+			slog.Info("Received events", slog.Int("events.count", len(events.Items)), CalAttr)
+		case err := <-errc:
+			slog.Error(fmt.Sprintf("Received error: %v", err), CalAttr)
+			go func() {
+				waitNextMinute()
+				Load(c, errc)
+			}()
+		default:
+			if events != nil {
+				for _, item := range events.Items {
+					if Match(item) {
+						err := Execute(item, cfg.AutoStart)
+						if err != nil {
+							slog.Error(fmt.Sprintf("Execute: %v", err.Error()), CalAttr)
+						}
+					}
+				}
+			}
+			waitNextMinute()
+		}
+	}
 }
 
 // Load loads events from the local calendar and sends them to the provided channel.
-func Load(ch chan<- *Events, errch chan<- error, retryLimit int) {
+func Load(ch chan<- *configs.Events, errch chan<- error) {
 	d, err := platform.ConfigDir()
 	if err != nil {
 		errch <- err
 		return
 	}
 
-	file, err := os.OpenFile(filepath.Join(d, "config.json"), os.O_CREATE|os.O_RDONLY, 0640)
+	file, err := os.OpenFile(filepath.Join(d, configs.ConfigFile), os.O_CREATE|os.O_RDONLY, 0640)
 	if err != nil {
 		errch <- err
 		return
@@ -54,34 +67,29 @@ func Load(ch chan<- *Events, errch chan<- error, retryLimit int) {
 	defer file.Close()
 
 	for {
-		var events Events
-		var err error
+		var events configs.Events
+		file.Seek(0, 0)
 
-		for i := 0; i < retryLimit; i++ {
-			if err = json.NewDecoder(file).Decode(&events); err == nil {
-				break
-			}
-		}
-
+		err := json.NewDecoder(file).Decode(&events)
 		if err != nil {
 			errch <- err
 			return
 		}
 
 		ch <- &events
-		waitNextHour()
+		waitNextMinute()
 	}
 }
 
 // Match checks if the given event matches the current time(hh:mm) and day.
-func Match(event *Event) bool {
+func Match(event *configs.Event) bool {
 	now := time.Now()
 	for _, d := range event.Start.Days {
 		if d == now.Weekday().String() {
-			slog.Info("Matching event",
+			slog.Info("Match",
 				slog.String("event.time", event.Start.Time),
 				slog.String("now.time", now.Format("15:04")),
-				slog.String("calendar", CalendarName),
+				CalAttr,
 			)
 
 			return event.Start.Time == now.Format("15:04")
@@ -92,7 +100,7 @@ func Match(event *Event) bool {
 }
 
 // Execute executes actions associated with the given event, such as notifying and potentially starting a meeting.
-func Execute(event *Event, autoStart bool) error {
+func Execute(event *configs.Event, autoStart bool) error {
 	if err := platform.Notify(event.Summary, event.Url); err != nil {
 		slog.Error(err.Error())
 	}
