@@ -27,49 +27,63 @@ type Events struct {
 	Items []*Event `json:"events"`
 }
 
+func waitNextHour() {
+	sd := time.Until(time.Now().Truncate(time.Hour).Add(time.Hour))
+
+	slog.Info("Waiting for the next hour to reload events",
+		slog.String("time.sleep", sd.String()),
+		slog.String("calendar", CalendarName),
+	)
+
+	time.Sleep(sd)
+}
+
 // Load loads events from the local calendar and sends them to the provided channel.
-func Load(ch chan<- *Events, errch chan<- error) {
+func Load(ch chan<- *Events, errch chan<- error, retryLimit int) {
+	d, err := platform.ConfigDir()
+	if err != nil {
+		errch <- err
+		return
+	}
+
+	file, err := os.OpenFile(filepath.Join(d, "config.json"), os.O_CREATE|os.O_RDONLY, 0640)
+	if err != nil {
+		errch <- err
+		return
+	}
+	defer file.Close()
+
 	for {
-		d, err := platform.ConfigDir()
-		if err != nil {
-			errch <- err
-			return
-		}
-
-		file, err := os.OpenFile(filepath.Join(d, "config.json"), os.O_CREATE|os.O_RDONLY, 0640)
-		if err != nil {
-			errch <- err
-			return
-		}
-		defer file.Close()
-
 		var events Events
-		if err := json.NewDecoder(file).Decode(&events); err != nil {
+		var err error
+
+		for i := 0; i < retryLimit; i++ {
+			if err = json.NewDecoder(file).Decode(&events); err == nil {
+				break
+			}
+		}
+
+		if err != nil {
 			errch <- err
 			return
 		}
 
 		ch <- &events
-		st := time.Until(time.Now().Truncate(time.Hour).Add(time.Hour))
-		slog.Info("Wait until the beginning of the next hour",
-			slog.String("time.sleep", st.String()),
-			slog.String("calendar", CalendarName),
-		)
-		time.Sleep(st)
+		waitNextHour()
 	}
 }
 
 // Match checks if the given event matches the current time(hh:mm) and day.
 func Match(event *Event) bool {
 	now := time.Now()
-	slog.Info("Matching event",
-		slog.String("event.time", event.Start.Time),
-		slog.String("now.time", now.Format("15:04")),
-		slog.String("calendar", CalendarName),
-	)
-
 	for _, d := range event.Start.Days {
 		if d == now.Weekday().String() {
+			slog.Info("Matching event",
+				slog.String("event.time", event.Start.Time),
+				slog.String("now.time", now.Format("15:04")),
+				slog.String("calendar", CalendarName),
+			)
+
 			return event.Start.Time == now.Format("15:04")
 		}
 	}

@@ -55,6 +55,17 @@ func initLogger() (*os.File, error) {
 	return file, nil
 }
 
+func waitNextMinute(calendarName string) {
+	sd := time.Until(time.Now().Truncate(time.Minute).Add(time.Minute))
+
+	slog.Info("Waiting for the next minute to recheck events",
+		slog.String("time.sleep", sd.String()),
+		slog.String("calendar", calendarName),
+	)
+
+	time.Sleep(sd)
+}
+
 func main() {
 	file, err := initLogger()
 	if err != nil {
@@ -78,8 +89,9 @@ func main() {
 	gerrch := make(chan error)
 	lerrch := make(chan error)
 
-	go googlecal.Fetch(gch, gerrch)
-	go localcal.Load(lch, lerrch)
+	retryLimit := 32
+	go googlecal.Fetch(gch, gerrch, retryLimit)
+	go localcal.Load(lch, lerrch, retryLimit)
 
 	// Monitor Google calendar events.
 	go func() {
@@ -89,7 +101,7 @@ func main() {
 			case gevents = <-gch:
 				slog.Info("Read from Google calendar channel")
 			case err := <-gerrch:
-				slog.Error("Unable to fetch events: %v", err, slog.String("calendar", "Google calendar"))
+				slog.Error(fmt.Sprintf("Unable to fetch events: %v", err), slog.String("calendar", "Google calendar"))
 				break loop
 			default:
 				if gevents != nil {
@@ -108,13 +120,7 @@ func main() {
 						}
 					}
 				}
-
-				st := time.Until(time.Now().Truncate(time.Minute).Add(time.Minute))
-				slog.Info("Done iteration; time to sleep",
-					slog.String("sleep.time", st.String()),
-					slog.String("calendar", "Google calendar"),
-				)
-				time.Sleep(st)
+				waitNextMinute("Google calendar")
 			}
 		}
 	}()
@@ -127,7 +133,7 @@ func main() {
 			case levents = <-lch:
 				slog.Info("Read from Local calendar channel")
 			case err := <-lerrch:
-				slog.Error("Unable to load events: %v", err, slog.String("calendar", "Local calendar"))
+				slog.Error(fmt.Sprintf("Unable to load events: %v", err), slog.String("calendar", "Local calendar"))
 				break loop
 			default:
 				if levents != nil {
@@ -140,13 +146,7 @@ func main() {
 						}
 					}
 				}
-
-				st := time.Until(time.Now().Truncate(time.Minute).Add(time.Minute))
-				slog.Info("Done iteration; time to sleep",
-					slog.String("sleep.time", st.String()),
-					slog.String("calendar", "Local calendar"),
-				)
-				time.Sleep(st)
+				waitNextMinute("Local calendar")
 			}
 		}
 	}()

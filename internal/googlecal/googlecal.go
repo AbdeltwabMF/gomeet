@@ -125,27 +125,48 @@ func initService() (*calendar.Service, error) {
 	return calendar.NewService(ctx, option.WithHTTPClient(client))
 }
 
+func waitNextHour() {
+	sd := time.Until(time.Now().Truncate(time.Hour).Add(time.Hour))
+
+	slog.Info("Waiting for the next hour to refetch events",
+		slog.String("time.sleep", sd.String()),
+		slog.String("calendar", CalendarName),
+	)
+
+	time.Sleep(sd)
+}
+
 // Fetch fetches calendar events and sends them through the provided channel.
 // It periodically fetches events, sleeping until the beginning of the next hour between fetches.
-func Fetch(ch chan<- *calendar.Events, errch chan<- error) {
+func Fetch(ch chan<- *calendar.Events, errch chan<- error, retryLimit int) {
 	srv, err := initService()
 	if err != nil {
 		errch <- err
 		return
 	}
 
+	const (
+		maxEvents  = 7
+		hoursInDay = 24
+	)
+
 	for {
 		now := time.Now()
-		events, err := srv.Events.List("primary").
-			// From now
-			TimeMin(now.Format(time.RFC3339)).
-			// Until end of the day
-			TimeMax(now.Truncate(24 * time.Hour).Add(24 * time.Hour).Format(time.RFC3339)).
-			// Fetch only 7 events; assuming calendar is busy and there is an event every 10min
-			MaxResults(7).
-			SingleEvents(true).
-			OrderBy("startTime").
-			Do()
+		var events *calendar.Events
+
+		for i := 0; i < retryLimit; i++ {
+			events, err = srv.Events.List("primary").
+				TimeMin(now.Format(time.RFC3339)).
+				TimeMax(now.Truncate(hoursInDay * time.Hour).Add(hoursInDay * time.Hour).Format(time.RFC3339)).
+				MaxResults(maxEvents).
+				SingleEvents(true).
+				OrderBy("startTime").
+				Do()
+
+			if err == nil {
+				break
+			}
+		}
 
 		if err != nil {
 			errch <- err
@@ -153,12 +174,7 @@ func Fetch(ch chan<- *calendar.Events, errch chan<- error) {
 		}
 
 		ch <- events
-		st := time.Until(now.Truncate(time.Hour).Add(time.Hour))
-		slog.Info("Wait until the beginning of the next hour",
-			slog.String("time.sleep", st.String()),
-			slog.String("calendar", CalendarName),
-		)
-		time.Sleep(st)
+		waitNextHour()
 	}
 }
 
@@ -176,6 +192,7 @@ func Match(event *calendar.Event) (bool, error) {
 		slog.String("now.time", now.Format("15:04")),
 		slog.String("calendar", CalendarName),
 	)
+
 	return t.Format("15:04") == now.Format("15:04"), nil
 }
 
