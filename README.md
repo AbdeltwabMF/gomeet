@@ -22,23 +22,12 @@ Before using `gomeet`, configure it with your details in a valid JSON format. Yo
 - [Create a Google Cloud project](https://developers.google.com/workspace/guides/create-project).
 - Generate a [credentials.json](configs/credentials.json) file and place it alongside [config.json](configs/config.json) in the gomeet config directory.
 
->[!CAUTION]
-> Events are checked every hour. To include an event starting before the next check, restart gomeet.
-
 ## Build
 
 **Requirements**: [Go programming language](https://go.dev/) (version go1.22.1 or later recommended)
 
-**Windows**:
-
 ```shell
-go build -o bin/gomeet.exe -ldflags "-H windowsgui -s -w" ./cmd
-```
-
-**Unix-based Systems**:
-
-```shell
-go build -o bin/gomeet -ldflags "-s -w" ./cmd
+make build
 ```
 
 ## Usage
