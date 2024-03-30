@@ -68,9 +68,13 @@ func Load(ch chan<- *configs.Events, errch chan<- error) {
 
 	for {
 		var events configs.Events
-		file.Seek(0, 0)
+		_, err := file.Seek(0, 0)
+		if err != nil {
+			errch <- err
+			return
+		}
 
-		err := json.NewDecoder(file).Decode(&events)
+		err = json.NewDecoder(file).Decode(&events)
 		if err != nil {
 			errch <- err
 			return
