@@ -9,9 +9,9 @@ Before using `gomeet`, configure it with your details in a valid JSON format. Yo
 > [!IMPORTANT]
 > The [config.json](configs/config.json) file is placed in the configuration directory of your system:
 >
-> - Windows: it's `%AppData%` (i.e. `C:\Users\<user-name>\AppData\Roaming\gomeet\`).
-> - Darwin: it's `$HOME/Library/Application Support/gomeet`.
-> - Gnu/Linux: it's `$XDG_CONFIG_HOME`, if non-empty, else `$HOME/.config/gomeet`.
+> - Windows: it's `%AppData%\gomeet\` (i.e. `C:\Users\<user-name>\AppData\Roaming\gomeet\`).
+> - Darwin: it's `$HOME/Library/Application Support/gomeet/`.
+> - Gnu/Linux: it's `$XDG_CONFIG_HOME/gomeet/`, if non-empty, else `$HOME/.config/gomeet/`.
 
 ### Adding calendars
 
@@ -24,7 +24,7 @@ Before using `gomeet`, configure it with your details in a valid JSON format. Yo
 
 ## Build
 
-**Requirements**: [Go programming language](https://go.dev/) (version go1.22.1 or later recommended)
+**Requirements**: [Go programming language](https://go.dev/) (version go1.22.1 or later)
 
 ```shell
 make build
@@ -52,7 +52,7 @@ For automatic startup on Unix-based systems, refer to your specific distribution
 > [!NOTE]
 > `gomeet` logs important events (errors, warnings) to a log file for troubleshooting.
 >
-> - Windows: `%LocalAppData%\gomeet\logs\` or `C:\Users\<user-name>\AppData\Local\gomeet\logs`.
+> - Windows: `%LocalAppData%\gomeet\logs\` or `C:\Users\<user-name>\AppData\Local\gomeet\logs\`.
 > - Darwin: `~/Library/Logs/gomeet/`.
 > - Gnu/Linux: `/var/log/gomeet/`
 
