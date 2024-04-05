@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -20,60 +20,9 @@ import (
 	"github.com/AbdeltwabMF/gomeet/internal/platform"
 )
 
-var CalAttr = slog.String("calendar", "Google")
-
-func authorizeAccess(cfg *oauth2.Config) (*oauth2.Token, error) {
-	authzURL := cfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-
-	q := strings.Index(authzURL, "?")
-	err := platform.OpenURL(fmt.Sprintf(`%s"%s"`, authzURL[:q+1], authzURL[q+2:]))
-	if err != nil {
-		return nil, err
-	}
-
-	c := make(chan *oauth2.Token, 2)
-	http.HandleFunc("/", func(w http.ResponseWriter, req *http.Request) {
-		handleOAuthCallback(c, w, req, cfg)
-	})
-
-	go func() {
-		if err := http.ListenAndServe("", nil); err != nil {
-			slog.Error(err.Error())
-		}
-	}()
-
-	d, err := platform.ConfigDir()
-	if err != nil {
-		return nil, err
-	}
-
-	tok := <-c
-	return tok, saveToken(filepath.Join(d, configs.TokenFile), tok)
-}
-
-func loadToken(path string) (*oauth2.Token, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	tok := &oauth2.Token{}
-	return tok, json.NewDecoder(file).Decode(tok)
-}
-
-func saveToken(path string, tok *oauth2.Token) error {
-	file, err := os.OpenFile(path, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0600)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	return json.NewEncoder(file).Encode(tok)
-}
-
-func handleOAuthCallback(c chan<- *oauth2.Token, w http.ResponseWriter, req *http.Request, cfg *oauth2.Config) {
-	qv := req.URL.Query()
+// handleOAuthCallback exchanges the authorization code for a token and sends it to the provided channel.
+func handleOAuthCallback(c chan<- *oauth2.Token, cfg *oauth2.Config, w http.ResponseWriter, r *http.Request) {
+	qv := r.URL.Query()
 	code := qv.Get("code")
 	if code == "" {
 		http.Error(w, "Missing code parameter", http.StatusBadRequest)
@@ -84,145 +33,201 @@ func handleOAuthCallback(c chan<- *oauth2.Token, w http.ResponseWriter, req *htt
 	if err != nil {
 		http.Error(w, fmt.Sprintf("Unable to retrieve token: %v", err), http.StatusInternalServerError)
 		return
-	} else {
-		fmt.Fprintf(w, "Authentication successful! You can now close this window.")
 	}
+	fmt.Fprintf(w, "Access granted! You can now close this window.")
 
 	c <- tok
 }
 
-func initService() (*calendar.Service, error) {
-	ctx := context.Background()
+// authorizeAccess opens a browser window for the user to authenticate and authorize access.
+func authorizeAccess(cfg *oauth2.Config) error {
+	c := make(chan *oauth2.Token, 1)
 
-	c, err := platform.ConfigDir()
+	server := &http.Server{}
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		handleOAuthCallback(c, cfg, w, r)
+	})
+
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
+		}
+	}()
+
+	defer func() {
+		if err := server.Shutdown(context.Background()); err != nil {
+			slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
+		}
+	}()
+
+	url := cfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
+	q := strings.Index(url, "?")
+	if err := platform.OpenURL(fmt.Sprintf(`%s"%s"`, url[:q+1], url[q+2:])); err != nil {
+		return err
+	}
+
+	tok := <-c
+	return saveToken(tok)
+}
+
+// saveToken saves the OAuth2 token to a file.
+func saveToken(tok *oauth2.Token) error {
+	f, err := configs.OpenToken(os.O_CREATE | os.O_TRUNC | os.O_WRONLY)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	return json.NewEncoder(f).Encode(tok)
+}
+
+// loadToken loads the OAuth2 token from a file.
+func loadToken() (*oauth2.Token, error) {
+	f, err := configs.OpenToken(os.O_RDONLY)
 	if err != nil {
 		return nil, err
 	}
+	defer f.Close()
 
-	bytes, err := os.ReadFile(filepath.Join(c, configs.CredentialsFile))
+	tok := &oauth2.Token{}
+	err = json.NewDecoder(f).Decode(tok)
+
+	return tok, err
+}
+
+// getToken retrieves the OAuth2 token. If it does not exist, it creates a new token.
+func getToken(cfg *oauth2.Config) (*oauth2.Token, error) {
+	tok, err := loadToken()
+	if err != nil {
+		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
+
+		// Create a new access token
+		if err := authorizeAccess(cfg); err != nil {
+			return nil, err
+		}
+
+		tok, err = loadToken()
+	}
+
+	return tok, err
+}
+
+// initService initializes the Google Calendar API service.
+func initService() (*calendar.Service, error) {
+	f, err := configs.OpenCredentials(os.O_RDONLY)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	b, err := io.ReadAll(f)
 	if err != nil {
 		return nil, err
 	}
 
 	// If modifying these scopes, delete your previously saved token.json
-	cfg, err := google.ConfigFromJSON(bytes, calendar.CalendarEventsReadonlyScope)
+	cfg, err := google.ConfigFromJSON(b, calendar.CalendarEventsReadonlyScope)
 	if err != nil {
 		return nil, err
 	}
 
-	tok, err := loadToken(filepath.Join(c, configs.TokenFile))
+	tok, err := getToken(cfg)
 	if err != nil {
-		slog.Error(err.Error())
-
-		tok, err = authorizeAccess(cfg)
-		if err != nil {
-			return nil, err
-		}
+		return nil, err
 	}
 
 	client := cfg.Client(context.Background(), tok)
+	ctx := context.Background()
+
 	return calendar.NewService(ctx, option.WithHTTPClient(client))
 }
 
-func waitNextMinute() {
-	time.Sleep(time.Until(time.Now().Truncate(time.Minute).Add(time.Minute)))
-}
-
+// Monitor continuously monitors Google Calendar events.
 func Monitor(cfg *configs.Config) {
-	var events *calendar.Events
-	c := make(chan *calendar.Events, 2)
-	errc := make(chan error, 2)
+	srv, err := initService()
+	if err != nil {
+		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
+		return
+	}
 
-	go Fetch(c, errc)
+	events := new(calendar.Events)
+
+	fetchTicker := time.NewTicker(time.Minute + time.Second*7)
+	checkTicker := time.NewTicker(time.Minute)
+
+	c := make(chan *calendar.Events, 1)
 
 	for {
 		select {
 		case events = <-c:
-			slog.Info("Received events", slog.Int("events.count", len(events.Items)), CalAttr)
-		case err := <-errc:
-			slog.Error(fmt.Sprintf("Received error: %v", err), CalAttr)
-			go func() {
-				waitNextMinute()
-				Fetch(c, errc)
-			}()
-		default:
-			if events != nil {
-				for _, item := range events.Items {
-					matched, err := Match(item)
-					if err != nil {
-						slog.Error(err.Error())
-						continue
-					}
-
-					if matched {
-						err := Execute(item, cfg.AutoStart)
-						if err != nil {
-							slog.Error(fmt.Sprintf("Execute: %v", err.Error()), CalAttr)
-						}
-					}
-				}
-			}
-			waitNextMinute()
+			slog.Info("Received events", slog.Int("count", len(events.Items)), slog.Any("func", configs.CallerInfo()))
+		case <-fetchTicker.C:
+			go Fetch(c, srv)
+		case <-checkTicker.C:
+			Check(events, cfg) // Check in this goroutine to prevent unsynchronized access to events
 		}
 	}
 }
 
-// Fetch fetches calendar events and sends them through the provided channel.
-// It periodically fetches events, sleeping until the beginning of the next hour between fetches.
-func Fetch(ch chan<- *calendar.Events, errch chan<- error) {
-	srv, err := initService()
+// Fetch retrieves upcoming Google Calendar events for the day.
+func Fetch(c chan<- *calendar.Events, srv *calendar.Service) {
+	now := time.Now()
+	endofday := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
+
+	events, err := srv.Events.List("primary").
+		TimeMin(now.Format(time.RFC3339)).
+		TimeMax(endofday.Format(time.RFC3339)).
+		MaxResults(7).
+		SingleEvents(true).
+		OrderBy("startTime").
+		Do()
 	if err != nil {
-		errch <- err
+		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
 		return
 	}
 
-	for {
-		now := time.Now()
-		endofday := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
-		events, err := srv.Events.List("primary").
-			TimeMin(now.Format(time.RFC3339)).
-			TimeMax(endofday.Format(time.RFC3339)).
-			MaxResults(7).
-			SingleEvents(true).
-			OrderBy("startTime").
-			Do()
+	c <- events
+}
 
-		if err != nil {
-			errch <- err
-			return
+// Check checks all events for a match with the current time and executes actions accordingly.
+func Check(events *calendar.Events, cfg *configs.Config) {
+	for _, e := range events.Items {
+		if Match(e) {
+			if err := Execute(e, cfg.AutoStart); err != nil {
+				slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
+			}
 		}
-
-		ch <- events
-		waitNextMinute()
 	}
 }
 
-// Match checks if the given event matches the current time(hh:mm).
-func Match(event *calendar.Event) (bool, error) {
-	now := time.Now()
-
-	t, err := time.Parse(time.RFC3339, event.Start.DateTime)
+// Match checks if the calendar event start time matches the current time.
+func Match(e *calendar.Event) bool {
+	st, err := time.Parse(time.RFC3339, e.Start.DateTime)
 	if err != nil {
-		return false, err
+		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
+		return false
 	}
 
-	slog.Info("Match",
-		slog.String("event.time", t.Format("15:04")),
-		slog.String("now.time", now.Format("15:04")),
-		CalAttr,
+	now := time.Now()
+	slog.Debug("Matching event",
+		slog.String("now", now.Format("15:04")),
+		slog.String("then", st.Format("15:04")),
+		slog.Any("func", configs.CallerInfo()),
 	)
 
-	return t.Format("15:04") == now.Format("15:04"), nil
+	return st.Format("15:04") == now.Format("15:04")
 }
 
-// Execute executes actions associated with the given event, such as notifying and potentially starting a meeting.
-func Execute(event *calendar.Event, autoStart bool) error {
-	if err := platform.Notify(event.Summary, event.Location); err != nil {
-		slog.Error(err.Error())
+// Execute executes actions based on the given calendar event.
+func Execute(e *calendar.Event, autoStart bool) error {
+	if err := platform.Notify(e.Summary, e.Location); err != nil {
+		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
 	}
 
 	if autoStart {
-		return platform.OpenURL(event.Location)
+		return platform.OpenURL(e.Location)
 	}
+
 	return nil
 }

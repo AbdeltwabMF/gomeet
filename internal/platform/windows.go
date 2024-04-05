@@ -12,37 +12,36 @@ import (
 	"github.com/go-toast/toast"
 )
 
-const (
-	ToolName = "gomeet"
-)
+const ToolName = "gomeet"
+const LocalDirKey = "LOCALAPPDATA"
 
-// Notify sends a meeting notification with the specified summary and URL.
+// Notify displays a notification with the given summary and URL.
 func Notify(summary string, url string) error {
-	notification := toast.Notification{
-		AppID:    "gomeet",
+	n := toast.Notification{
+		AppID:    ToolName,
 		Title:    "Join Meeting: " + summary,
 		Message:  "Click to join the meeting now.",
 		Actions:  []toast.Action{{Type: "protocol", Label: "Join", Arguments: url}},
 		Duration: toast.Long,
 	}
 
-	return notification.Push()
+	return n.Push()
 }
 
-// OpenURL opens the specified URL in the default web browser.
+// OpenURL opens the provided URL in the default web browser.
 func OpenURL(url string) error {
 	cmd := exec.Command("cmd", "/c", "start", url)
 	return cmd.Run()
 }
 
-// LogDir returns the directory path for storing logs related to the tool.
-func LogDir() (string, error) {
-	l := os.Getenv("LOCALAPPDATA")
-	if l == "" {
-		return "", fmt.Errorf("'LOCALAPPDATA' is not defined in the environment variables")
+// LogDir returns the path to the log directory.
+func LogDir() (path string, err error) {
+	d := os.Getenv(LocalDirKey)
+	if d == "" {
+		return "", fmt.Errorf("'%s' environment variable is not set", LocalDirKey)
 	}
 
-	d := filepath.Join(l, ToolName, "logs")
+	d = filepath.Join(d, ToolName, "logs")
 	if err := os.MkdirAll(d, 0750); err != nil {
 		return "", err
 	}
@@ -50,14 +49,14 @@ func LogDir() (string, error) {
 	return d, nil
 }
 
-// ConfigDir returns the directory path for storing configuration files related to the tool.
-func ConfigDir() (string, error) {
-	c, err := os.UserConfigDir()
+// ConfigDir returns the path to the configuration directory.
+func ConfigDir() (path string, err error) {
+	d, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
 	}
 
-	d := filepath.Join(c, ToolName)
+	d = filepath.Join(d, ToolName)
 	if err := os.MkdirAll(d, 0750); err != nil {
 		return "", err
 	}

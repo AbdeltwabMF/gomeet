@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"log/slog"
-	_ "net/http/pprof"
 	"os"
 
 	"github.com/AbdeltwabMF/gomeet/configs"
@@ -12,16 +11,17 @@ import (
 )
 
 func main() {
-	file, err := configs.InitLogger()
+	f, err := configs.OpenLog(os.O_CREATE | os.O_TRUNC | os.O_WRONLY)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	defer file.Close()
+	defer f.Close()
+	configs.InitLogger(f)
 
 	cfg, err := configs.LoadConfig()
 	if err != nil {
-		slog.Error(err.Error())
+		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
 		os.Exit(1)
 	}
 
