@@ -54,7 +54,8 @@ Simply run the built binary to start the program as a background daemon.
 
 For automatic startup on Unix-based systems, refer to your specific distribution's documentation on creating systemd or runit services.
 
-> [!NOTE] > `gomeet` logs important events (errors, warnings) to a log file for troubleshooting.
+> [!NOTE]
+> `gomeet` logs important events (errors, warnings) to a log file for troubleshooting.
 >
 > - Windows: `%LocalAppData%\gomeet\logs\` or `C:\Users\<user-name>\AppData\Local\gomeet\logs\`.
 > - Darwin: `~/Library/Logs/gomeet/`.
