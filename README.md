@@ -1,6 +1,11 @@
 <h1 align="center">gomeet</h1>
 
-<p align="center">A meeting reminder and auto-joiner that simplifies meeting management by automatically storing, retrieving, and opening meeting links</p>
+<h4 align="center">A meeting reminder and auto-joiner that simplifies meeting management by automatically storing, retrieving, and opening meeting links</h4>
+
+<p align="center">
+  <a href="https://goreportcard.com/report/github.com/AbdeltwabMF/gomeet"><img src="https://goreportcard.com/badge/github.com/AbdeltwabMF/gomeet" alt="Go Report Card"></a>
+  <img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/AbdeltwabMF/gomeet/release.yaml">
+</p>
 
 ## Configuration
 
@@ -49,8 +54,7 @@ Simply run the built binary to start the program as a background daemon.
 
 For automatic startup on Unix-based systems, refer to your specific distribution's documentation on creating systemd or runit services.
 
-> [!NOTE]
-> `gomeet` logs important events (errors, warnings) to a log file for troubleshooting.
+> [!NOTE] > `gomeet` logs important events (errors, warnings) to a log file for troubleshooting.
 >
 > - Windows: `%LocalAppData%\gomeet\logs\` or `C:\Users\<user-name>\AppData\Local\gomeet\logs\`.
 > - Darwin: `~/Library/Logs/gomeet/`.
