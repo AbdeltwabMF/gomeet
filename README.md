@@ -3,8 +3,11 @@
 <h4 align="center">A meeting reminder and auto-joiner that simplifies meeting management by automatically storing, retrieving, and opening meeting links</h4>
 
 <p align="center">
+  <img alt="GitHub go.mod Go version" src="https://img.shields.io/github/go-mod/go-version/AbdeltwabMF/gomeet">
   <a href="https://goreportcard.com/report/github.com/AbdeltwabMF/gomeet"><img src="https://goreportcard.com/badge/github.com/AbdeltwabMF/gomeet" alt="Go Report Card"></a>
+  <img alt="GitHub License" src="https://img.shields.io/github/license/AbdeltwabMF/gomeet">
   <img alt="GitHub Workflow Status" src="https://img.shields.io/github/actions/workflow/status/AbdeltwabMF/gomeet/release.yaml">
+  <img alt="Static Badge" src="https://img.shields.io/badge/viva-palestina-149954">
 </p>
 
 ## Configuration
