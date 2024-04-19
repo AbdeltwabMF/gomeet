@@ -30,6 +30,9 @@ Before using `gomeet`, configure it with your details in a valid JSON format. Yo
 - [Create a Google Cloud project](https://developers.google.com/workspace/guides/create-project).
 - Generate a [credentials.json](configs/credentials.json) file and place it alongside [config.json](configs/config.json) in the gomeet config directory.
 
+> [!IMPORTANT]
+> The URL of the event should be placed in **Location** (الموقع الجغرافي) field.
+
 ## Build
 
 **Requirements**: [Go programming language](https://go.dev/) (version go1.22.1 or later)
