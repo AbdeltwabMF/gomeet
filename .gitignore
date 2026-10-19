@@ -13,9 +13,19 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+coverage.*
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
 # Go workspace file
 go.work
+
+# Build output
+/bin/
+
+# Local runtime files that may contain meeting links or credentials
+config.json
+credentials.json
+token.json
+log.txt

@@ -3,7 +3,7 @@
   "events": [
     {
       "summary": "Standup Meeting",
-      "url": "https://us04web.zoom.us/j/77774689468?pwd=Lb883c3ZsRNikUvErHASaiSvHGUTer.1",
+      "url": "https://meet.example.com/j/example-standup",
       "start": {
         "time": "11:00",
         "days": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday"]
@@ -11,7 +11,7 @@
     },
     {
       "summary": "Catchup Meeting",
-      "url": "https://us04web.zoom.us/j/77774989498?pwd=Lb998c3ZsRNikUvErHASaiSvHGUTer.1",
+      "url": "https://meet.example.com/j/example-catchup",
       "start": {
         "time": "15:00",
         "days": ["Sunday"]

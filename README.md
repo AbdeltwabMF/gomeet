@@ -12,7 +12,7 @@
 
 ## Configuration
 
-Before using `gomeet`, configure it with your details in a valid JSON format. You'll find an example configuration file [config.json](configs/config.json) to get you started.
+Before using `gomeet`, configure it with your details in a valid JSON format. You'll find an example configuration file [config.example.json](examples/config.example.json) to get you started.
 
 > [!IMPORTANT]
 > The [config.json](configs/config.json) file is placed in the configuration directory of your system:
@@ -23,12 +23,12 @@ Before using `gomeet`, configure it with your details in a valid JSON format. Yo
 
 ### Adding calendars
 
-**Local Calendar**: Include your local calendar details in the `"events"` array within [config.json](configs/config.json).
+**Local Calendar**: Include your local calendar details in the `"events"` array within `config.json`.
 
 **Google Calendar**:
 
 - [Create a Google Cloud project](https://developers.google.com/workspace/guides/create-project).
-- Generate a [credentials.json](configs/credentials.json) file and place it alongside [config.json](configs/config.json) in the gomeet config directory.
+- Generate a `credentials.json` file and place it alongside `config.json` in the gomeet config directory. See [credentials.example.json](examples/credentials.example.json) for the expected format.
 
 > [!IMPORTANT]
 > The URL of the event should be placed in **Location** (الموقع الجغرافي) field.
