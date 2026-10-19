@@ -45,49 +45,54 @@ type FuncInfo struct {
 	Line int
 }
 
-// OpenLog opens the log file with the specified flags.
-func OpenLog(flags int) (*os.File, error) {
+// OpenLog opens the log file for appending.
+func OpenLog() (*os.File, error) {
 	d, err := platform.LogDir()
 	if err != nil {
 		return nil, err
 	}
 
-	return os.OpenFile(filepath.Join(d, LogFile), flags, 0640)
+	return os.OpenFile(filepath.Join(d, LogFile), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0640)
 }
 
-// OpenConfig opens the configuration file with the specified flags.
-func OpenConfig(flags int) (*os.File, error) {
+// OpenConfig opens the configuration file for reading.
+func OpenConfig() (*os.File, error) {
 	d, err := platform.ConfigDir()
 	if err != nil {
 		return nil, err
 	}
 
-	return os.OpenFile(filepath.Join(d, ConfigFile), flags, 0640)
+	return os.OpenFile(filepath.Join(d, ConfigFile), os.O_RDONLY, 0640)
 }
 
-// OpenCredentials opens the credentials file with the specified flags.
-func OpenCredentials(flags int) (*os.File, error) {
+// OpenCredentials opens the credentials file for reading.
+func OpenCredentials() (*os.File, error) {
 	d, err := platform.ConfigDir()
 	if err != nil {
 		return nil, err
 	}
 
-	return os.OpenFile(filepath.Join(d, CredentialsFile), flags, 0600)
+	return os.OpenFile(filepath.Join(d, CredentialsFile), os.O_RDONLY, 0600)
 }
 
-// OpenToken opens the token file with the specified flags.
-func OpenToken(flags int) (*os.File, error) {
+// OpenToken opens the token file for reading.
+func OpenToken() (*os.File, error) {
 	d, err := platform.ConfigDir()
 	if err != nil {
 		return nil, err
 	}
 
-	return os.OpenFile(filepath.Join(d, TokenFile), flags, 0600)
+	return os.OpenFile(filepath.Join(d, TokenFile), os.O_RDONLY, 0600)
+}
+
+// TokenDir returns the directory that stores the OAuth token.
+func TokenDir() (string, error) {
+	return platform.ConfigDir()
 }
 
 // LoadConfig loads the configuration from the configuration file.
 func LoadConfig() (*Config, error) {
-	f, err := OpenConfig(os.O_RDONLY)
+	f, err := OpenConfig()
 	if err != nil {
 		return nil, err
 	}

@@ -2,12 +2,10 @@ package googlecal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -71,51 +69,9 @@ func authorizeAccess(cfg *oauth2.Config) error {
 	return saveToken(tok)
 }
 
-// saveToken saves the OAuth2 token to a file.
-func saveToken(tok *oauth2.Token) error {
-	f, err := configs.OpenToken(os.O_CREATE | os.O_TRUNC | os.O_WRONLY)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	return json.NewEncoder(f).Encode(tok)
-}
-
-// loadToken loads the OAuth2 token from a file.
-func loadToken() (*oauth2.Token, error) {
-	f, err := configs.OpenToken(os.O_RDONLY)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-
-	tok := &oauth2.Token{}
-	err = json.NewDecoder(f).Decode(tok)
-
-	return tok, err
-}
-
-// getToken retrieves the OAuth2 token. If it does not exist, it creates a new token.
-func getToken(cfg *oauth2.Config) (*oauth2.Token, error) {
-	tok, err := loadToken()
-	if err != nil {
-		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
-
-		// Create a new access token
-		if err := authorizeAccess(cfg); err != nil {
-			return nil, err
-		}
-
-		tok, err = loadToken()
-	}
-
-	return tok, err
-}
-
 // initService initializes the Google Calendar API service.
 func initService() (*calendar.Service, error) {
-	f, err := configs.OpenCredentials(os.O_RDONLY)
+	f, err := configs.OpenCredentials()
 	if err != nil {
 		return nil, err
 	}

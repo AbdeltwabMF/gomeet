@@ -11,7 +11,7 @@ import (
 )
 
 func main() {
-	f, err := configs.OpenLog(os.O_APPEND | os.O_CREATE | os.O_WRONLY)
+	f, err := configs.OpenLog()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
