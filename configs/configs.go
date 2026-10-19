@@ -6,9 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -37,12 +35,6 @@ type Event struct {
 	Summary string `json:"summary"`
 	URL     string `json:"url"`
 	Start   Start  `json:"start"`
-}
-
-type FuncInfo struct {
-	Name string
-	File string
-	Line int
 }
 
 // OpenLog opens the log file for appending.
@@ -188,7 +180,8 @@ func validateClockTime(value string) error {
 func InitLogger(w io.Writer) {
 	logger := slog.New(slog.NewTextHandler(w,
 		&slog.HandlerOptions{
-			Level: slog.LevelDebug,
+			Level:     slog.LevelDebug,
+			AddSource: true,
 			ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
 				if a.Key == slog.TimeKey {
 					return slog.Any(a.Key, a.Value.Time().Format("2006-01-02 15:04:05"))
@@ -197,17 +190,4 @@ func InitLogger(w io.Writer) {
 			}},
 	))
 	slog.SetDefault(logger)
-}
-
-// CallerInfo returns information about the caller of the function where it's called.
-func CallerInfo() FuncInfo {
-	pc, file, line, ok := runtime.Caller(1) // 0: Function info, 1: Caller info
-	if !ok {
-		return FuncInfo{}
-	}
-
-	file = path.Base(file)
-	name := path.Base(runtime.FuncForPC(pc).Name())
-
-	return FuncInfo{Name: name, File: file, Line: line}
 }
