@@ -1,7 +1,10 @@
+// Package googlecal monitors Google Calendar events and reminds the user
+// when a meeting is about to start.
 package googlecal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -13,6 +16,19 @@ import (
 
 	"github.com/AbdeltwabMF/gomeet/configs"
 	"github.com/AbdeltwabMF/gomeet/internal/platform"
+	"github.com/AbdeltwabMF/gomeet/internal/schedule"
+)
+
+const (
+	// fetchInterval is how often the calendar is refreshed.
+	fetchInterval = time.Minute + 7*time.Second
+	// checkInterval is how often occurrences are evaluated.
+	checkInterval = time.Minute
+	// startupGrace covers the small delay between a meeting starting and the
+	// monitor noticing it.
+	startupGrace = 5 * time.Minute
+	// requestTimeout bounds a single Calendar API request.
+	requestTimeout = 30 * time.Second
 )
 
 // initService initializes the Google Calendar API service.
@@ -44,95 +60,173 @@ func initService(ctx context.Context) (*calendar.Service, error) {
 	return calendar.NewService(ctx, option.WithHTTPClient(client))
 }
 
-// Monitor continuously monitors Google Calendar events until the context is
-// cancelled.
+// Monitor watches Google Calendar for meeting occurrences until the context
+// is cancelled.
 func Monitor(ctx context.Context, cfg *configs.Config) error {
 	srv, err := initService(ctx)
 	if err != nil {
 		return err
 	}
 
-	events := new(calendar.Events)
+	deduper := schedule.NewDeduper(256)
+	lastCheck := time.Now().Add(-startupGrace)
 
-	fetchTicker := time.NewTicker(time.Minute + 7*time.Second)
+	var events []*calendar.Event
+
+	// Fetch before the first check so that occurrences shortly after startup
+	// are not missed.
+	fetched, err := Fetch(ctx, srv, time.Now())
+	if err != nil {
+		return err
+	}
+	events = fetched
+
+	check := func(now time.Time) error {
+		for _, e := range events {
+			start, ok := eventStart(e)
+			if !ok {
+				continue
+			}
+			if !schedule.Occurrence(start, lastCheck, now) {
+				continue
+			}
+
+			key := eventKey(e, start)
+			if !deduper.First(key, start, now) {
+				continue
+			}
+			if err := Execute(ctx, e, cfg.AutoStart); err != nil {
+				// A failed reminder must not stop the monitor.
+				slog.Error("execute event failed", slog.Any("error", err), slog.String("event", e.Id))
+			}
+		}
+		lastCheck = now
+
+		return nil
+	}
+
+	if err := check(time.Now()); err != nil {
+		return err
+	}
+
+	fetchTicker := time.NewTicker(fetchInterval)
 	defer fetchTicker.Stop()
 
-	checkTicker := time.NewTicker(time.Minute)
+	checkTicker := time.NewTicker(checkInterval)
 	defer checkTicker.Stop()
-
-	c := make(chan *calendar.Events, 1)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case events = <-c:
-			slog.Info("Received events", slog.Int("count", len(events.Items)))
-		case <-fetchTicker.C:
-			go Fetch(c, srv)
-		case <-checkTicker.C:
-			Check(ctx, events, cfg) // Check in this goroutine to prevent unsynchronized access to events
-		}
-	}
-}
-
-// Fetch retrieves upcoming Google Calendar events for the day.
-func Fetch(c chan<- *calendar.Events, srv *calendar.Service) {
-	now := time.Now()
-	endofday := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, time.UTC)
-
-	events, err := srv.Events.List("primary").
-		TimeMin(now.Format(time.RFC3339)).
-		TimeMax(endofday.Format(time.RFC3339)).
-		MaxResults(7).
-		SingleEvents(true).
-		OrderBy("startTime").
-		Do()
-	if err != nil {
-		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
-		return
-	}
-
-	c <- events
-}
-
-// Check checks all events for a match with the current time and executes actions accordingly.
-func Check(ctx context.Context, events *calendar.Events, cfg *configs.Config) {
-	for _, e := range events.Items {
-		if Match(e) {
-			if err := Execute(ctx, e, cfg.AutoStart); err != nil {
-				slog.Error("execute event failed", slog.Any("error", err))
+		case now := <-checkTicker.C:
+			if err := check(now); err != nil {
+				return err
 			}
+		case <-fetchTicker.C:
+			fetched, err := Fetch(ctx, srv, time.Now())
+			if err != nil {
+				// Keep the previous events when a refresh fails.
+				slog.Error("fetch calendar events failed", slog.Any("error", err))
+				continue
+			}
+			events = fetched
+			slog.Info("Received events", slog.Int("count", len(events)))
 		}
 	}
 }
 
-// Match checks if the calendar event start time matches the current time.
-func Match(e *calendar.Event) bool {
-	st, err := time.Parse(time.RFC3339, e.Start.DateTime)
-	if err != nil {
-		slog.Error("parse event start failed", slog.Any("error", err))
-		return false
+// Fetch retrieves the upcoming events for the local day, following pagination
+// so that busy days are fully covered.
+func Fetch(ctx context.Context, srv *calendar.Service, now time.Time) ([]*calendar.Event, error) {
+	loc := now.Location()
+	endOfDay := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, loc)
+
+	var events []*calendar.Event
+	pageToken := ""
+	for {
+		call := srv.Events.List("primary").
+			TimeMin(now.Format(time.RFC3339)).
+			TimeMax(endOfDay.Format(time.RFC3339)).
+			SingleEvents(true).
+			OrderBy("startTime")
+		if pageToken != "" {
+			call = call.PageToken(pageToken)
+		}
+
+		reqCtx, cancel := context.WithTimeout(ctx, requestTimeout)
+		page, err := call.Context(reqCtx).Do()
+		cancel()
+		if err != nil {
+			return nil, fmt.Errorf("list events: %w", err)
+		}
+
+		for _, e := range page.Items {
+			if e == nil || e.Status == "cancelled" {
+				continue
+			}
+			events = append(events, e)
+		}
+
+		pageToken = page.NextPageToken
+		if pageToken == "" {
+			break
+		}
 	}
 
-	now := time.Now()
-	slog.Debug("Matching event",
-		slog.String("now", now.Format("15:04")),
-		slog.String("then", st.Format("15:04")),
-	)
-
-	return st.Format("15:04") == now.Format("15:04")
+	return events, nil
 }
 
-// Execute executes actions based on the given calendar event.
+// eventStart returns the absolute start time of an event.
+func eventStart(e *calendar.Event) (time.Time, bool) {
+	if e == nil || e.Start == nil {
+		return time.Time{}, false
+	}
+
+	// All-day events report a date without a time and are not meetings.
+	if e.Start.DateTime == "" {
+		return time.Time{}, false
+	}
+
+	start, err := time.Parse(time.RFC3339, e.Start.DateTime)
+	if err != nil {
+		slog.Error("parse event start failed", slog.Any("error", err), slog.String("event", e.Id))
+		return time.Time{}, false
+	}
+
+	return start, true
+}
+
+// eventKey builds a stable key for a single occurrence.
+func eventKey(e *calendar.Event, start time.Time) string {
+	id := e.Id
+	if id == "" {
+		id = e.ICalUID
+	}
+
+	return fmt.Sprintf("%s\x00%s\x00%s", id, e.Location, start.UTC().Format(time.RFC3339))
+}
+
+// Execute performs the reminder actions for an event. The meeting link is
+// opened automatically only when autoStart is enabled.
 func Execute(ctx context.Context, e *calendar.Event, autoStart bool) error {
+	if e.Location == "" {
+		// The meeting link is stored in the location field, so an event
+		// without one has nothing to open.
+		slog.Debug("event has no meeting link", slog.String("event", e.Id))
+		return nil
+	}
+
+	var errs []error
+
 	if err := platform.Notify(ctx, e.Summary, e.Location); err != nil {
-		slog.Error("send notification failed", slog.Any("error", err))
+		errs = append(errs, err)
 	}
-
 	if autoStart {
-		return platform.OpenURL(ctx, e.Location)
+		if err := platform.OpenURL(ctx, e.Location); err != nil {
+			errs = append(errs, err)
+		}
 	}
 
-	return nil
+	return errors.Join(errs...)
 }
