@@ -1,3 +1,5 @@
+// Package localcal monitors the recurring events defined in the local
+// configuration file.
 package localcal
 
 import (
@@ -9,23 +11,29 @@ import (
 	"github.com/AbdeltwabMF/gomeet/internal/platform"
 )
 
-// Monitor continuously monitors local calendar events.
-func Monitor(cfg *configs.Config) {
+// Monitor continuously monitors local calendar events until the context is
+// cancelled.
+func Monitor(ctx context.Context, cfg *configs.Config) error {
 	events := cfg.Events
 
-	loadTicker := time.NewTicker(time.Minute + time.Second*7)
+	loadTicker := time.NewTicker(time.Minute + 7*time.Second)
+	defer loadTicker.Stop()
+
 	checkTicker := time.NewTicker(time.Minute)
+	defer checkTicker.Stop()
 
 	c := make(chan []configs.Event, 1)
 
 	for {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case events = <-c:
-			slog.Info("Received events", slog.Int("count", len(events)), slog.Any("func", configs.CallerInfo()))
+			slog.Info("Received events", slog.Int("count", len(events)))
 		case <-loadTicker.C:
 			go Load(c)
 		case <-checkTicker.C:
-			Check(events, cfg) // Check in this goroutine to prevent unsynchronized access to events
+			Check(ctx, events, cfg) // Check in this goroutine to prevent unsynchronized access to events
 		}
 	}
 }
@@ -34,7 +42,7 @@ func Monitor(cfg *configs.Config) {
 func Load(c chan<- []configs.Event) {
 	cfg, err := configs.LoadConfig()
 	if err != nil {
-		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
+		slog.Error("load configuration failed", slog.Any("error", err))
 		return
 	}
 
@@ -42,11 +50,11 @@ func Load(c chan<- []configs.Event) {
 }
 
 // Check checks all events for a match with the current day and time and executes actions accordingly.
-func Check(events []configs.Event, cfg *configs.Config) {
+func Check(ctx context.Context, events []configs.Event, cfg *configs.Config) {
 	for i := range events {
 		if Match(&events[i]) {
-			if err := Execute(&events[i], cfg.AutoStart); err != nil {
-				slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
+			if err := Execute(ctx, &events[i], cfg.AutoStart); err != nil {
+				slog.Error("execute event failed", slog.Any("error", err))
 			}
 		}
 	}
@@ -61,7 +69,6 @@ func Match(e *configs.Event) (ok bool) {
 			slog.Debug("Matching event",
 				slog.String("now", now.Format("15:04")),
 				slog.String("then", e.Start.Time),
-				slog.Any("func", configs.CallerInfo()),
 			)
 
 			return e.Start.Time == now.Format("15:04")
@@ -72,13 +79,13 @@ func Match(e *configs.Event) (ok bool) {
 }
 
 // Execute executes actions based on the given calendar event.
-func Execute(e *configs.Event, autoStart bool) error {
-	if err := platform.Notify(context.Background(), e.Summary, e.URL); err != nil {
-		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
+func Execute(ctx context.Context, e *configs.Event, autoStart bool) error {
+	if err := platform.Notify(ctx, e.Summary, e.URL); err != nil {
+		slog.Error("send notification failed", slog.Any("error", err))
 	}
 
 	if autoStart {
-		return platform.OpenURL(context.Background(), e.URL)
+		return platform.OpenURL(ctx, e.URL)
 	}
 
 	return nil

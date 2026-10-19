@@ -6,6 +6,7 @@ require github.com/go-toast/toast v0.0.0-20190211030409-01e6764cf0a4 // direct
 
 require (
 	golang.org/x/oauth2 v0.18.0
+	golang.org/x/sync v0.6.0
 	golang.org/x/sys v0.18.0
 	google.golang.org/api v0.171.0
 )

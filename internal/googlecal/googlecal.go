@@ -99,29 +99,34 @@ func initService() (*calendar.Service, error) {
 	return calendar.NewService(ctx, option.WithHTTPClient(client))
 }
 
-// Monitor continuously monitors Google Calendar events.
-func Monitor(cfg *configs.Config) {
+// Monitor continuously monitors Google Calendar events until the context is
+// cancelled.
+func Monitor(ctx context.Context, cfg *configs.Config) error {
 	srv, err := initService()
 	if err != nil {
-		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
-		return
+		return err
 	}
 
 	events := new(calendar.Events)
 
-	fetchTicker := time.NewTicker(time.Minute + time.Second*7)
+	fetchTicker := time.NewTicker(time.Minute + 7*time.Second)
+	defer fetchTicker.Stop()
+
 	checkTicker := time.NewTicker(time.Minute)
+	defer checkTicker.Stop()
 
 	c := make(chan *calendar.Events, 1)
 
 	for {
 		select {
+		case <-ctx.Done():
+			return ctx.Err()
 		case events = <-c:
-			slog.Info("Received events", slog.Int("count", len(events.Items)), slog.Any("func", configs.CallerInfo()))
+			slog.Info("Received events", slog.Int("count", len(events.Items)))
 		case <-fetchTicker.C:
 			go Fetch(c, srv)
 		case <-checkTicker.C:
-			Check(events, cfg) // Check in this goroutine to prevent unsynchronized access to events
+			Check(ctx, events, cfg) // Check in this goroutine to prevent unsynchronized access to events
 		}
 	}
 }
@@ -147,11 +152,11 @@ func Fetch(c chan<- *calendar.Events, srv *calendar.Service) {
 }
 
 // Check checks all events for a match with the current time and executes actions accordingly.
-func Check(events *calendar.Events, cfg *configs.Config) {
+func Check(ctx context.Context, events *calendar.Events, cfg *configs.Config) {
 	for _, e := range events.Items {
 		if Match(e) {
-			if err := Execute(e, cfg.AutoStart); err != nil {
-				slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
+			if err := Execute(ctx, e, cfg.AutoStart); err != nil {
+				slog.Error("execute event failed", slog.Any("error", err))
 			}
 		}
 	}
@@ -161,7 +166,7 @@ func Check(events *calendar.Events, cfg *configs.Config) {
 func Match(e *calendar.Event) bool {
 	st, err := time.Parse(time.RFC3339, e.Start.DateTime)
 	if err != nil {
-		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
+		slog.Error("parse event start failed", slog.Any("error", err))
 		return false
 	}
 
@@ -169,20 +174,19 @@ func Match(e *calendar.Event) bool {
 	slog.Debug("Matching event",
 		slog.String("now", now.Format("15:04")),
 		slog.String("then", st.Format("15:04")),
-		slog.Any("func", configs.CallerInfo()),
 	)
 
 	return st.Format("15:04") == now.Format("15:04")
 }
 
 // Execute executes actions based on the given calendar event.
-func Execute(e *calendar.Event, autoStart bool) error {
-	if err := platform.Notify(context.Background(), e.Summary, e.Location); err != nil {
-		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
+func Execute(ctx context.Context, e *calendar.Event, autoStart bool) error {
+	if err := platform.Notify(ctx, e.Summary, e.Location); err != nil {
+		slog.Error("send notification failed", slog.Any("error", err))
 	}
 
 	if autoStart {
-		return platform.OpenURL(context.Background(), e.Location)
+		return platform.OpenURL(ctx, e.Location)
 	}
 
 	return nil
