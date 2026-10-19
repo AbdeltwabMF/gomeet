@@ -54,7 +54,7 @@ func authorizeAccess(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token, er
 		return nil, err
 	}
 
-	result := make(chan *oauth2.Token, 1)
+	result := make(chan oauthResult, 1)
 
 	// Use a private mux so that no other handler is affected.
 	mux := http.NewServeMux()
@@ -88,8 +88,8 @@ func authorizeAccess(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token, er
 	}
 
 	select {
-	case tok := <-result:
-		return tok, nil
+	case res := <-result:
+		return res.token, res.err
 	case err := <-serveErr:
 		return nil, fmt.Errorf("oauth callback server failed: %w", err)
 	case <-ctx.Done():
@@ -97,9 +97,15 @@ func authorizeAccess(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token, er
 	}
 }
 
-// handleOAuthCallback exchanges the authorization code for a token and sends
-// it to the provided channel.
-func handleOAuthCallback(c chan<- *oauth2.Token, cfg *oauth2.Config, state string, w http.ResponseWriter, r *http.Request) {
+// oauthResult carries the outcome of the authorization callback.
+type oauthResult struct {
+	token *oauth2.Token
+	err   error
+}
+
+// handleOAuthCallback exchanges the authorization code for a token, stores it,
+// and reports the outcome to the provided channel.
+func handleOAuthCallback(c chan<- oauthResult, cfg *oauth2.Config, state string, w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -129,14 +135,24 @@ func handleOAuthCallback(c chan<- *oauth2.Token, cfg *oauth2.Config, state strin
 	if err != nil {
 		http.Error(w, "Unable to retrieve token", http.StatusInternalServerError)
 		slog.Error("exchange authorization code failed", slog.Any("error", err))
+		c <- oauthResult{err: fmt.Errorf("exchange authorization code: %w", err)}
+		return
+	}
+
+	// Store the token before reporting success, so that a storage failure is
+	// visible to the user and to the caller.
+	if err := saveToken(tok); err != nil {
+		http.Error(w, "Unable to store token", http.StatusInternalServerError)
+		slog.Error("store token failed", slog.Any("error", err))
+		c <- oauthResult{err: fmt.Errorf("store token: %w", err)}
 		return
 	}
 
 	fmt.Fprint(w, "Access granted! You can now close this window.")
 
-	// Never block the handler if a token was already delivered.
+	// Never block the handler if a result was already delivered.
 	select {
-	case c <- tok:
+	case c <- oauthResult{token: tok}:
 	default:
 	}
 }

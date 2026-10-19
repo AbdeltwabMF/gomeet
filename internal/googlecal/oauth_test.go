@@ -33,7 +33,7 @@ func TestRandomStateIsUnique(t *testing.T) {
 func TestHandleOAuthCallbackRejectsBadState(t *testing.T) {
 	t.Parallel()
 
-	result := make(chan *oauth2.Token, 1)
+	result := make(chan oauthResult, 1)
 	cfg := &oauth2.Config{ClientID: "id", ClientSecret: "secret", Endpoint: oauth2.Endpoint{TokenURL: "https://example.com/token"}}
 
 	recorder := httptest.NewRecorder()
@@ -54,7 +54,7 @@ func TestHandleOAuthCallbackRejectsBadState(t *testing.T) {
 func TestHandleOAuthCallbackRejectsMissingCode(t *testing.T) {
 	t.Parallel()
 
-	result := make(chan *oauth2.Token, 1)
+	result := make(chan oauthResult, 1)
 	cfg := &oauth2.Config{ClientID: "id", ClientSecret: "secret"}
 
 	recorder := httptest.NewRecorder()
@@ -70,7 +70,7 @@ func TestHandleOAuthCallbackRejectsMissingCode(t *testing.T) {
 func TestHandleOAuthCallbackRejectsProviderError(t *testing.T) {
 	t.Parallel()
 
-	result := make(chan *oauth2.Token, 1)
+	result := make(chan oauthResult, 1)
 	cfg := &oauth2.Config{ClientID: "id", ClientSecret: "secret"}
 
 	recorder := httptest.NewRecorder()
@@ -86,7 +86,7 @@ func TestHandleOAuthCallbackRejectsProviderError(t *testing.T) {
 func TestHandleOAuthCallbackRejectsWrongMethod(t *testing.T) {
 	t.Parallel()
 
-	result := make(chan *oauth2.Token, 1)
+	result := make(chan oauthResult, 1)
 	cfg := &oauth2.Config{ClientID: "id", ClientSecret: "secret"}
 
 	recorder := httptest.NewRecorder()
@@ -107,7 +107,7 @@ func TestHandleOAuthCallbackRejectsExchangeFailure(t *testing.T) {
 	}))
 	defer server.Close()
 
-	result := make(chan *oauth2.Token, 1)
+	result := make(chan oauthResult, 1)
 	cfg := &oauth2.Config{
 		ClientID:     "id",
 		ClientSecret: "secret",
@@ -123,9 +123,15 @@ func TestHandleOAuthCallbackRejectsExchangeFailure(t *testing.T) {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)
 	}
 	select {
-	case tok := <-result:
-		t.Fatalf("no token should be delivered, got %v", tok)
+	case res := <-result:
+		if res.err == nil {
+			t.Fatal("expected an error result")
+		}
+		if res.token != nil {
+			t.Fatal("no token should be delivered")
+		}
 	default:
+		t.Fatal("an error result should be delivered")
 	}
 }
 

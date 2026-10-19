@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"time"
 
+	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
@@ -55,7 +56,10 @@ func initService(ctx context.Context) (*calendar.Service, error) {
 		return nil, err
 	}
 
-	client := cfg.Client(ctx, tok)
+	// Persist refreshed tokens so that a restart does not require the user to
+	// authorize again.
+	source := &tokenSource{source: cfg.TokenSource(ctx, tok)}
+	client := oauth2.NewClient(ctx, source)
 
 	return calendar.NewService(ctx, option.WithHTTPClient(client))
 }
