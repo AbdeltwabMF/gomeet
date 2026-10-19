@@ -4,19 +4,26 @@
 package platform
 
 import (
+	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/go-toast/toast"
+	"golang.org/x/sys/windows"
 )
 
-const ToolName = "gomeet"
 const LocalDirKey = "LOCALAPPDATA"
 
 // Notify displays a notification with the given summary and URL.
-func Notify(summary string, url string) error {
+func Notify(ctx context.Context, summary string, url string) error {
+	if err := ValidateURL(url); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
 	n := toast.Notification{
 		AppID:    ToolName,
 		Title:    "Join Meeting: " + summary,
@@ -29,9 +36,24 @@ func Notify(summary string, url string) error {
 }
 
 // OpenURL opens the provided URL in the default web browser.
-func OpenURL(url string) error {
-	cmd := exec.Command("cmd", "/c", "start", url)
-	return cmd.Run()
+func OpenURL(ctx context.Context, url string) error {
+	if err := ValidateURL(url); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	verb, err := windows.UTF16PtrFromString("open")
+	if err != nil {
+		return err
+	}
+	target, err := windows.UTF16PtrFromString(url)
+	if err != nil {
+		return err
+	}
+
+	return windows.ShellExecute(0, verb, target, nil, nil, windows.SW_SHOWNORMAL)
 }
 
 // LogDir returns the path to the log directory.

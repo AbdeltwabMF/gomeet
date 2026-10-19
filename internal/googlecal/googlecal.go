@@ -63,7 +63,7 @@ func authorizeAccess(cfg *oauth2.Config) error {
 
 	url := cfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
 	q := strings.Index(url, "?")
-	if err := platform.OpenURL(fmt.Sprintf(`%s"%s"`, url[:q+1], url[q+2:])); err != nil {
+	if err := platform.OpenURL(context.Background(), fmt.Sprintf(`%s"%s"`, url[:q+1], url[q+2:])); err != nil {
 		return err
 	}
 
@@ -221,12 +221,12 @@ func Match(e *calendar.Event) bool {
 
 // Execute executes actions based on the given calendar event.
 func Execute(e *calendar.Event, autoStart bool) error {
-	if err := platform.Notify(e.Summary, e.Location); err != nil {
+	if err := platform.Notify(context.Background(), e.Summary, e.Location); err != nil {
 		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
 	}
 
 	if autoStart {
-		return platform.OpenURL(e.Location)
+		return platform.OpenURL(context.Background(), e.Location)
 	}
 
 	return nil

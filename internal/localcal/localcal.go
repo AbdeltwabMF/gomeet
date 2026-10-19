@@ -1,6 +1,7 @@
 package localcal
 
 import (
+	"context"
 	"encoding/json"
 	"log/slog"
 	"os"
@@ -81,12 +82,12 @@ func Match(e *configs.Event) (ok bool) {
 
 // Execute executes actions based on the given calendar event.
 func Execute(e *configs.Event, autoStart bool) error {
-	if err := platform.Notify(e.Summary, e.Url); err != nil {
+	if err := platform.Notify(context.Background(), e.Summary, e.Url); err != nil {
 		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
 	}
 
 	if autoStart {
-		return platform.OpenURL(e.Url)
+		return platform.OpenURL(context.Background(), e.Url)
 	}
 
 	return nil

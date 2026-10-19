@@ -4,25 +4,29 @@
 package platform
 
 import (
-	"errors"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 )
 
-const ToolName = "gomeet"
-
-var ErrNotImplemented = errors.New("feature: not implemented on Linux platform")
-
 // Notify displays a notification with the given summary and URL.
-func Notify(summary string, url string) error {
-	return ErrNotImplemented
+func Notify(ctx context.Context, summary string, url string) error {
+	if err := ValidateURL(url); err != nil {
+		return err
+	}
+
+	return exec.CommandContext(ctx, "notify-send", "--app-name", ToolName, "--",
+		"Join Meeting: "+summary, "Click to join: "+url).Run()
 }
 
 // OpenURL opens the provided URL in the default web browser.
-func OpenURL(url string) error {
-	cmd := exec.Command("xdg-open", url)
-	return cmd.Run()
+func OpenURL(ctx context.Context, url string) error {
+	if err := ValidateURL(url); err != nil {
+		return err
+	}
+
+	return exec.CommandContext(ctx, "xdg-open", url).Run()
 }
 
 // LogDir returns the path to the log directory.
