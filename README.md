@@ -48,7 +48,7 @@ make build
 Simply run the built binary to start the program as a background daemon.
 
 ```shell
-./bin/gomeet.exe &
+./bin/gomeet &
 ```
 
 ### Startup as Service (Windows only)
@@ -65,7 +65,7 @@ For automatic startup on Unix-based systems, refer to your specific distribution
 >
 > - Windows: `%LocalAppData%\gomeet\logs\` or `C:\Users\<user-name>\AppData\Local\gomeet\logs\`.
 > - Darwin: `~/Library/Logs/gomeet/`.
-> - Gnu/Linux: `/var/log/gomeet/`
+> - Gnu/Linux: `$XDG_CACHE_HOME/gomeet/logs/`, if set, otherwise `$HOME/.cache/gomeet/logs/`.
 
 ## License
 

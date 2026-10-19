@@ -27,7 +27,12 @@ func OpenURL(url string) error {
 
 // LogDir returns the path to the log directory.
 func LogDir() (path string, err error) {
-	d := filepath.Join("/", "var", "log", ToolName)
+	d, err := os.UserCacheDir()
+	if err != nil {
+		return "", err
+	}
+
+	d = filepath.Join(d, ToolName, "logs")
 	if err := os.MkdirAll(d, 0750); err != nil {
 		return "", err
 	}
