@@ -5,11 +5,8 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net/http"
-	"strings"
 	"time"
 
-	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/calendar/v3"
 	"google.golang.org/api/option"
@@ -18,83 +15,31 @@ import (
 	"github.com/AbdeltwabMF/gomeet/internal/platform"
 )
 
-// handleOAuthCallback exchanges the authorization code for a token and sends it to the provided channel.
-func handleOAuthCallback(c chan<- *oauth2.Token, cfg *oauth2.Config, w http.ResponseWriter, r *http.Request) {
-	qv := r.URL.Query()
-	code := qv.Get("code")
-	if code == "" {
-		http.Error(w, "Missing code parameter", http.StatusBadRequest)
-		return
-	}
-
-	tok, err := cfg.Exchange(context.Background(), code)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Unable to retrieve token: %v", err), http.StatusInternalServerError)
-		return
-	}
-	fmt.Fprintf(w, "Access granted! You can now close this window.")
-
-	c <- tok
-}
-
-// authorizeAccess opens a browser window for the user to authenticate and authorize access.
-func authorizeAccess(cfg *oauth2.Config) error {
-	c := make(chan *oauth2.Token, 1)
-
-	server := &http.Server{}
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		handleOAuthCallback(c, cfg, w, r)
-	})
-
-	go func() {
-		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
-		}
-	}()
-
-	defer func() {
-		if err := server.Shutdown(context.Background()); err != nil {
-			slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
-		}
-	}()
-
-	url := cfg.AuthCodeURL("state-token", oauth2.AccessTypeOffline)
-	q := strings.Index(url, "?")
-	if err := platform.OpenURL(context.Background(), fmt.Sprintf(`%s"%s"`, url[:q+1], url[q+2:])); err != nil {
-		return err
-	}
-
-	tok := <-c
-	return saveToken(tok)
-}
-
 // initService initializes the Google Calendar API service.
-func initService() (*calendar.Service, error) {
+func initService(ctx context.Context) (*calendar.Service, error) {
 	f, err := configs.OpenCredentials()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open credentials: %w", err)
 	}
 	defer f.Close()
 
 	b, err := io.ReadAll(f)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read credentials: %w", err)
 	}
 
 	// If modifying these scopes, delete your previously saved token.json
 	cfg, err := google.ConfigFromJSON(b, calendar.CalendarEventsReadonlyScope)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse credentials: %w", err)
 	}
 
-	tok, err := getToken(cfg)
+	tok, err := getToken(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	client := cfg.Client(context.Background(), tok)
-	ctx := context.Background()
+	client := cfg.Client(ctx, tok)
 
 	return calendar.NewService(ctx, option.WithHTTPClient(client))
 }
@@ -102,7 +47,7 @@ func initService() (*calendar.Service, error) {
 // Monitor continuously monitors Google Calendar events until the context is
 // cancelled.
 func Monitor(ctx context.Context, cfg *configs.Config) error {
-	srv, err := initService()
+	srv, err := initService(ctx)
 	if err != nil {
 		return err
 	}

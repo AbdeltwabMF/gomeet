@@ -1,9 +1,11 @@
 package googlecal
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log/slog"
+	"io/fs"
 	"os"
 	"path/filepath"
 
@@ -12,21 +14,27 @@ import (
 	"github.com/AbdeltwabMF/gomeet/configs"
 )
 
-// getToken retrieves the OAuth2 token. If it does not exist, it creates a new token.
-func getToken(cfg *oauth2.Config) (*oauth2.Token, error) {
+// getToken retrieves the OAuth2 token. It starts an interactive authorization
+// only when no token has been stored yet.
+func getToken(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token, error) {
 	tok, err := loadToken()
-	if err != nil {
-		slog.Error(err.Error(), slog.Any("func", configs.CallerInfo()))
-
-		// Create a new access token
-		if err := authorizeAccess(cfg); err != nil {
-			return nil, err
-		}
-
-		tok, err = loadToken()
+	if err == nil {
+		return tok, nil
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		return nil, fmt.Errorf("load token: %w", err)
 	}
 
-	return tok, err
+	// No token exists yet, so ask the user to authorize this application.
+	tok, err = authorizeAccess(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := saveToken(tok); err != nil {
+		return nil, err
+	}
+
+	return tok, nil
 }
 
 // loadToken loads the OAuth2 token from a file.
