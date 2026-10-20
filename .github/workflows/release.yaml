@@ -10,6 +10,9 @@ defaults:
   run:
     shell: bash
 
+permissions:
+  contents: write
+
 jobs:
   lint:
     runs-on: ${{ matrix.os }}
@@ -85,15 +88,11 @@ jobs:
         run: |
           go build -o "$BINARY_NAME" -v -ldflags "$FLAGS" ./cmd
 
-      - name: Release Notes
-        run:
-          git log $(git describe HEAD~ --tags --abbrev=0)..HEAD --pretty='format:* %h %s%n  * %an <%ae>' --no-merges >> ".github/RELEASE-TEMPLATE.md"
-
-      - name: Release with Notes
-        uses: softprops/action-gh-release@v1
+      - name: Release
+        uses: softprops/action-gh-release@v2
         with:
-          body_path: ".github/RELEASE-TEMPLATE.md"
           draft: false
+          generate_release_notes: true
           files: ${{ env.BINARY_NAME }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
