@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"golang.org/x/sync/errgroup"
 
@@ -43,7 +44,9 @@ func run() error {
 	group.Go(func() error { return localcal.Monitor(ctx, cfg) })
 
 	if configs.HasCredentials() {
-		group.Go(func() error { return googlecal.Monitor(ctx, cfg) })
+		// The Google monitor runs under its own supervision, so that a
+		// failure there does not stop the local calendar.
+		go monitorGoogle(ctx, cfg)
 	} else {
 		slog.Warn("Google Calendar credentials not found, only the local calendar is monitored")
 	}
@@ -55,4 +58,37 @@ func run() error {
 	slog.Info("Shutdown complete")
 
 	return nil
+}
+
+// monitorGoogle runs the Google Calendar monitor and retries it when it
+// fails, so that a temporary problem does not disable Google reminders.
+func monitorGoogle(ctx context.Context, cfg *configs.Config) {
+	const (
+		minDelay = 15 * time.Second
+		maxDelay = 5 * time.Minute
+	)
+
+	delay := minDelay
+
+	for {
+		err := googlecal.Monitor(ctx, cfg)
+		if ctx.Err() != nil {
+			return
+		}
+		if err == nil {
+			return
+		}
+
+		slog.Error("google calendar monitor failed, retrying", slog.Any("error", err), slog.Duration("retry_in", delay))
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(delay):
+		}
+
+		if delay *= 2; delay > maxDelay {
+			delay = maxDelay
+		}
+	}
 }
