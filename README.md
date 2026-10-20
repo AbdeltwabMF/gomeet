@@ -6,7 +6,7 @@
 Requires [Go](https://go.dev/) 1.26.0 or later.
 
 ```sh
-make build
+make check build
 ./bin/gomeet
 ```
 
@@ -36,7 +36,7 @@ Keep gomeet running to receive reminders. To run it in the background:
 ./bin/gomeet --background
 ```
 
-On Linux, notifications require `notify-send`. On Ubuntu or Debian, install it with `sudo apt install libnotify-bin`.
+On Linux, notifications require `notify-send`.
 
 <details>
 <summary>Connect Google Calendar (optional)</summary>
@@ -62,11 +62,6 @@ Keep the executable in a permanent location, then run:
 .\bin\gomeet.exe --install-startup --yes
 ```
 
-This creates a per-user scheduled task with a 30-second sign-in delay. It uses
-a Windows Script Host launcher to keep the console hidden while allowing Task
-Scheduler to track failures and restart gomeet. Do not add `--background` to
-the task.
-
 To remove automatic startup:
 
 ```powershell
@@ -77,9 +72,7 @@ If you move the executable, run the install command again.
 
 </details>
 
-On macOS and Linux, the startup-management flags exit with an
-unsupported-platform error without changing startup settings. Use your
-platform's systemd, launchd, or runit documentation instead.
+On macOS and Linux, use your platform's systemd, launchd, xinitrc, or runit documentation instead.
 
 ## Troubleshooting
 
