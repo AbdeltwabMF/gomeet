@@ -41,7 +41,12 @@ func run() error {
 
 	group, ctx := errgroup.WithContext(ctx)
 	group.Go(func() error { return localcal.Monitor(ctx, cfg) })
-	group.Go(func() error { return googlecal.Monitor(ctx, cfg) })
+
+	if configs.HasCredentials() {
+		group.Go(func() error { return googlecal.Monitor(ctx, cfg) })
+	} else {
+		slog.Warn("Google Calendar credentials not found, only the local calendar is monitored")
+	}
 
 	if err := group.Wait(); err != nil && !errors.Is(err, context.Canceled) {
 		return err

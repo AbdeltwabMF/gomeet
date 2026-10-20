@@ -82,6 +82,18 @@ func TokenDir() (string, error) {
 	return platform.ConfigDir()
 }
 
+// HasCredentials reports whether Google Calendar credentials are available.
+func HasCredentials() bool {
+	d, err := platform.ConfigDir()
+	if err != nil {
+		return false
+	}
+
+	info, err := os.Stat(filepath.Join(d, CredentialsFile))
+
+	return err == nil && !info.IsDir()
+}
+
 // LoadConfig loads the configuration from the configuration file.
 func LoadConfig() (*Config, error) {
 	f, err := OpenConfig()
