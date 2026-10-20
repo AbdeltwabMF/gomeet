@@ -39,7 +39,7 @@ func TestHandleOAuthCallbackRejectsBadState(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/oauth2/callback?code=abc&state=wrong", nil)
 
-	handleOAuthCallback(result, cfg, "expected-state", recorder, request)
+	handleOAuthCallback(context.Background(), result, cfg, "expected-state", recorder, request)
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
@@ -60,7 +60,7 @@ func TestHandleOAuthCallbackRejectsMissingCode(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/oauth2/callback?state=expected-state", nil)
 
-	handleOAuthCallback(result, cfg, "expected-state", recorder, request)
+	handleOAuthCallback(context.Background(), result, cfg, "expected-state", recorder, request)
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
@@ -76,10 +76,18 @@ func TestHandleOAuthCallbackRejectsProviderError(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/oauth2/callback?error=access_denied&state=expected-state", nil)
 
-	handleOAuthCallback(result, cfg, "expected-state", recorder, request)
+	handleOAuthCallback(context.Background(), result, cfg, "expected-state", recorder, request)
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+	}
+	select {
+	case res := <-result:
+		if res.err == nil {
+			t.Fatal("a denial must be reported to the caller")
+		}
+	default:
+		t.Fatal("a denial must be reported to the caller")
 	}
 }
 
@@ -92,7 +100,7 @@ func TestHandleOAuthCallbackRejectsWrongMethod(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/oauth2/callback?code=abc&state=expected-state", nil)
 
-	handleOAuthCallback(result, cfg, "expected-state", recorder, request)
+	handleOAuthCallback(context.Background(), result, cfg, "expected-state", recorder, request)
 
 	if recorder.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)
@@ -117,7 +125,7 @@ func TestHandleOAuthCallbackRejectsExchangeFailure(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/oauth2/callback?code=abc&state=expected-state", nil)
 
-	handleOAuthCallback(result, cfg, "expected-state", recorder, request)
+	handleOAuthCallback(context.Background(), result, cfg, "expected-state", recorder, request)
 
 	if recorder.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusInternalServerError)

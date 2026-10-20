@@ -59,7 +59,7 @@ func authorizeAccess(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token, er
 	// Use a private mux so that no other handler is affected.
 	mux := http.NewServeMux()
 	mux.HandleFunc("/oauth2/callback", func(w http.ResponseWriter, r *http.Request) {
-		handleOAuthCallback(result, &oauthCfg, state, w, r)
+		handleOAuthCallback(ctx, result, &oauthCfg, state, w, r)
 	})
 
 	server := &http.Server{
@@ -105,7 +105,7 @@ type oauthResult struct {
 
 // handleOAuthCallback exchanges the authorization code for a token, stores it,
 // and reports the outcome to the provided channel.
-func handleOAuthCallback(c chan<- oauthResult, cfg *oauth2.Config, state string, w http.ResponseWriter, r *http.Request) {
+func handleOAuthCallback(ctx context.Context, c chan<- oauthResult, cfg *oauth2.Config, state string, w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -114,12 +114,14 @@ func handleOAuthCallback(c chan<- oauthResult, cfg *oauth2.Config, state string,
 	query := r.URL.Query()
 	if errCode := query.Get("error"); errCode != "" {
 		http.Error(w, "Authorization denied: "+errCode, http.StatusBadRequest)
+		deliver(c, oauthResult{err: fmt.Errorf("authorization denied: %s", errCode)})
 		return
 	}
 
 	code := query.Get("code")
 	if code == "" {
 		http.Error(w, "Missing code parameter", http.StatusBadRequest)
+		deliver(c, oauthResult{err: errors.New("missing authorization code")})
 		return
 	}
 
@@ -128,14 +130,16 @@ func handleOAuthCallback(c chan<- oauthResult, cfg *oauth2.Config, state string,
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(r.Context(), exchangeTimeout)
+	// The exchange is bound to the flow context, not to the browser request,
+	// so that closing the browser window cannot abort a valid exchange.
+	exchangeCtx, cancel := context.WithTimeout(ctx, exchangeTimeout)
 	defer cancel()
 
-	tok, err := cfg.Exchange(ctx, code)
+	tok, err := cfg.Exchange(exchangeCtx, code)
 	if err != nil {
 		http.Error(w, "Unable to retrieve token", http.StatusInternalServerError)
 		slog.Error("exchange authorization code failed", slog.Any("error", err))
-		c <- oauthResult{err: fmt.Errorf("exchange authorization code: %w", err)}
+		deliver(c, oauthResult{err: fmt.Errorf("exchange authorization code: %w", err)})
 		return
 	}
 
@@ -144,15 +148,19 @@ func handleOAuthCallback(c chan<- oauthResult, cfg *oauth2.Config, state string,
 	if err := saveToken(tok); err != nil {
 		http.Error(w, "Unable to store token", http.StatusInternalServerError)
 		slog.Error("store token failed", slog.Any("error", err))
-		c <- oauthResult{err: fmt.Errorf("store token: %w", err)}
+		deliver(c, oauthResult{err: fmt.Errorf("store token: %w", err)})
 		return
 	}
 
 	fmt.Fprint(w, "Access granted! You can now close this window.")
 
-	// Never block the handler if a result was already delivered.
+	deliver(c, oauthResult{token: tok})
+}
+
+// deliver reports a result without blocking the handler.
+func deliver(c chan<- oauthResult, res oauthResult) {
 	select {
-	case c <- oauthResult{token: tok}:
+	case c <- res:
 	default:
 	}
 }

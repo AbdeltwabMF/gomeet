@@ -79,8 +79,8 @@ func TestFetchUsesLocalDayBoundary(t *testing.T) {
 	if timeMax != wantMax {
 		t.Fatalf("timeMax = %q, want %q", timeMax, wantMax)
 	}
-	if timeMin != now.Format(time.RFC3339) {
-		t.Fatalf("timeMin = %q, want %q", timeMin, now.Format(time.RFC3339))
+	if timeMin != now.Add(-startupGrace).Format(time.RFC3339) {
+		t.Fatalf("timeMin = %q, want %q", timeMin, now.Add(-startupGrace).Format(time.RFC3339))
 	}
 }
 
@@ -104,6 +104,82 @@ func TestEventStart(t *testing.T) {
 	}
 	if want := time.Date(2024, time.March, 5, 9, 30, 0, 0, time.FixedZone("UTC+3", 3*60*60)); !start.Equal(want) {
 		t.Fatalf("eventStart() = %v, want %v", start, want)
+	}
+}
+
+func TestDue(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2024, time.March, 5, 10, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name  string
+		start time.Time
+		want  bool
+	}{
+		{name: "future occurrence", start: now.Add(time.Minute), want: false},
+		{name: "starting now", start: now, want: true},
+		{name: "recently started", start: now.Add(-time.Minute), want: true},
+		{name: "within the grace period", start: now.Add(-startupGrace + time.Second), want: true},
+		{name: "outside the grace period", start: now.Add(-startupGrace - time.Minute), want: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := due(tt.start, now); got != tt.want {
+				t.Fatalf("due() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestMergeEventsKeepsLateArrivingEvents(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2024, time.March, 5, 10, 0, 0, 0, time.UTC)
+	known := make(map[string]*calendar.Event)
+
+	// An event that has just started and only shows up in the second fetch.
+	late := &calendar.Event{
+		Id:       "late",
+		Summary:  "Late",
+		Location: "https://meet.example.com/late",
+		Start:    &calendar.EventDateTime{DateTime: now.Add(-30 * time.Second).Format(time.RFC3339)},
+	}
+
+	mergeEvents(known, []*calendar.Event{late}, now)
+	if len(known) != 1 {
+		t.Fatalf("known contains %d events, want 1", len(known))
+	}
+
+	for key, e := range known {
+		start, ok := eventStart(e)
+		if !ok {
+			t.Fatal("event must have a start time")
+		}
+		if !due(start, now) {
+			t.Fatalf("event %q must still be due", key)
+		}
+	}
+}
+
+func TestMergeEventsDropsOldEvents(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2024, time.March, 5, 10, 0, 0, 0, time.UTC)
+	known := make(map[string]*calendar.Event)
+
+	old := &calendar.Event{
+		Id:       "old",
+		Summary:  "Old",
+		Location: "https://meet.example.com/old",
+		Start:    &calendar.EventDateTime{DateTime: now.Add(-2 * time.Hour).Format(time.RFC3339)},
+	}
+
+	mergeEvents(known, []*calendar.Event{old}, now)
+	if len(known) != 0 {
+		t.Fatalf("known contains %d events, want 0", len(known))
 	}
 }
 

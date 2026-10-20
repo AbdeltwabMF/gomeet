@@ -25,6 +25,8 @@ const (
 	fetchInterval = time.Minute + 7*time.Second
 	// checkInterval is how often occurrences are evaluated.
 	checkInterval = time.Minute
+	// reloadInterval is how often the configuration file is reloaded.
+	reloadInterval = time.Minute + 7*time.Second
 	// startupGrace covers the small delay between a meeting starting and the
 	// monitor noticing it.
 	startupGrace = 5 * time.Minute
@@ -57,8 +59,9 @@ func initService(ctx context.Context) (*calendar.Service, error) {
 	}
 
 	// Persist refreshed tokens so that a restart does not require the user to
-	// authorize again.
-	source := &tokenSource{source: cfg.TokenSource(ctx, tok)}
+	// authorize again. The stored token is remembered, so that it is only
+	// written again when it actually changed.
+	source := &tokenSource{source: cfg.TokenSource(ctx, tok), last: tok}
 	client := oauth2.NewClient(ctx, source)
 
 	return calendar.NewService(ctx, option.WithHTTPClient(client))
@@ -73,9 +76,11 @@ func Monitor(ctx context.Context, cfg *configs.Config) error {
 	}
 
 	deduper := schedule.NewDeduper(256)
-	lastCheck := time.Now().Add(-startupGrace)
+	autoStart := cfg.AutoStart
 
-	var events []*calendar.Event
+	// Events are merged instead of replaced, so that an event which appears
+	// shortly before its start time is still reported.
+	known := make(map[string]*calendar.Event)
 
 	// Fetch before the first check so that occurrences shortly after startup
 	// are not missed.
@@ -83,28 +88,26 @@ func Monitor(ctx context.Context, cfg *configs.Config) error {
 	if err != nil {
 		return err
 	}
-	events = fetched
+	mergeEvents(known, fetched, time.Now())
 
 	check := func(now time.Time) error {
-		for _, e := range events {
+		for key, e := range known {
 			start, ok := eventStart(e)
 			if !ok {
 				continue
 			}
-			if !schedule.Occurrence(start, lastCheck, now) {
+			if !due(start, now) {
 				continue
 			}
 
-			key := eventKey(e, start)
 			if !deduper.First(key, start, now) {
 				continue
 			}
-			if err := Execute(ctx, e, cfg.AutoStart); err != nil {
+			if err := Execute(ctx, e, autoStart); err != nil {
 				// A failed reminder must not stop the monitor.
 				slog.Error("execute event failed", slog.Any("error", err), slog.String("event", e.Id))
 			}
 		}
-		lastCheck = now
 
 		return nil
 	}
@@ -118,6 +121,9 @@ func Monitor(ctx context.Context, cfg *configs.Config) error {
 
 	checkTicker := time.NewTicker(checkInterval)
 	defer checkTicker.Stop()
+
+	reloadTicker := time.NewTicker(reloadInterval)
+	defer reloadTicker.Stop()
 
 	for {
 		select {
@@ -134,8 +140,16 @@ func Monitor(ctx context.Context, cfg *configs.Config) error {
 				slog.Error("fetch calendar events failed", slog.Any("error", err))
 				continue
 			}
-			events = fetched
-			slog.Info("Received events", slog.Int("count", len(events)))
+			mergeEvents(known, fetched, time.Now())
+			slog.Info("Received events", slog.Int("count", len(known)))
+		case <-reloadTicker.C:
+			reloaded, err := configs.LoadConfig()
+			if err != nil {
+				// Keep the previous settings when a reload fails.
+				slog.Error("reload configuration failed", slog.Any("error", err))
+				continue
+			}
+			autoStart = reloaded.AutoStart
 		}
 	}
 }
@@ -146,11 +160,15 @@ func Fetch(ctx context.Context, srv *calendar.Service, now time.Time) ([]*calend
 	loc := now.Location()
 	endOfDay := time.Date(now.Year(), now.Month(), now.Day()+1, 0, 0, 0, 0, loc)
 
+	// Start the window slightly in the past so that a meeting which has
+	// already begun is still returned.
+	timeMin := now.Add(-startupGrace)
+
 	var events []*calendar.Event
 	pageToken := ""
 	for {
 		call := srv.Events.List("primary").
-			TimeMin(now.Format(time.RFC3339)).
+			TimeMin(timeMin.Format(time.RFC3339)).
 			TimeMax(endOfDay.Format(time.RFC3339)).
 			SingleEvents(true).
 			OrderBy("startTime")
@@ -179,6 +197,37 @@ func Fetch(ctx context.Context, srv *calendar.Service, now time.Time) ([]*calend
 	}
 
 	return events, nil
+}
+
+// due reports whether an occurrence that starts at start should be reported
+// at the time now. An occurrence is reported once it has started, and stays
+// reportable for a short grace period so that events which appear shortly
+// before their start time are not missed.
+func due(start, now time.Time) bool {
+	if start.After(now) {
+		return false
+	}
+
+	return now.Sub(start) <= startupGrace
+}
+
+// mergeEvents adds the fetched events to the known events and drops the
+// events that are too old to be reported.
+func mergeEvents(known map[string]*calendar.Event, fetched []*calendar.Event, now time.Time) {
+	for _, e := range fetched {
+		start, ok := eventStart(e)
+		if !ok {
+			continue
+		}
+		known[eventKey(e, start)] = e
+	}
+
+	for key, e := range known {
+		start, ok := eventStart(e)
+		if !ok || now.Sub(start) > startupGrace {
+			delete(known, key)
+		}
+	}
 }
 
 // eventStart returns the absolute start time of an event.

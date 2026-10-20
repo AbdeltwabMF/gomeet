@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"golang.org/x/oauth2"
 )
@@ -33,6 +34,42 @@ func TestSaveTokenIsAtomicAndPrivate(t *testing.T) {
 	}
 	if len(entries) != 1 {
 		t.Fatalf("directory contains %d entries, want 1", len(entries))
+	}
+}
+
+func TestTokenSourceDoesNotRewriteUnchangedToken(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "token.json")
+
+	tok := &oauth2.Token{AccessToken: "access", Expiry: time.Now().Add(time.Hour)}
+	if err := writeToken(path, tok); err != nil {
+		t.Fatalf("writeToken() error = %v", err)
+	}
+
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat token: %v", err)
+	}
+
+	source := &tokenSource{
+		source: oauth2.StaticTokenSource(tok),
+		last:   tok,
+	}
+
+	for i := 0; i < 3; i++ {
+		if _, err := source.Token(); err != nil {
+			t.Fatalf("Token() error = %v", err)
+		}
+	}
+
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat token: %v", err)
+	}
+	if !before.ModTime().Equal(after.ModTime()) {
+		t.Fatal("the token file must not be rewritten when the token is unchanged")
 	}
 }
 

@@ -121,6 +121,7 @@ func writeToken(path string, tok *oauth2.Token) error {
 type tokenSource struct {
 	source oauth2.TokenSource
 	mu     sync.Mutex
+	last   *oauth2.Token
 }
 
 // Token returns a valid token and stores it when it has been refreshed.
@@ -132,8 +133,14 @@ func (s *tokenSource) Token() (*oauth2.Token, error) {
 	if err != nil {
 		return nil, fmt.Errorf("refresh token: %w", err)
 	}
-	if err := saveToken(tok); err != nil {
-		return nil, fmt.Errorf("save refreshed token: %w", err)
+
+	// Only write the token when it actually changed, so that a temporary
+	// storage failure cannot break requests that use a valid token.
+	if s.last == nil || s.last.AccessToken != tok.AccessToken || !s.last.Expiry.Equal(tok.Expiry) {
+		if err := saveToken(tok); err != nil {
+			return nil, fmt.Errorf("save refreshed token: %w", err)
+		}
+		s.last = tok
 	}
 
 	return tok, nil
