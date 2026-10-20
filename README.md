@@ -90,8 +90,12 @@ make build
 ```shell
 make test     # run the test suite
 make vet      # run go vet
-make check    # formatting, vet and tests
+make lint     # run golangci-lint v2.15.0
+make check    # formatting, vet, tests and lint
 ```
+
+The lint target requires [golangci-lint](https://golangci-lint.run/docs/welcome/install/)
+version 2.15.0.
 
 ## Usage
 

@@ -28,10 +28,13 @@ cover:
 vet:
 		go vet ./...
 
+lint:
+		golangci-lint run --timeout=30m
+
 fmt:
 		gofmt -w .
 
 fmt-check:
 		@test -z "$$(gofmt -l .)" || (echo "The following files are not formatted:"; gofmt -l .; exit 1)
 
-check: fmt-check vet test
+check: fmt-check vet test lint

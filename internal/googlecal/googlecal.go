@@ -40,11 +40,14 @@ func initService(ctx context.Context) (*calendar.Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open credentials: %w", err)
 	}
-	defer f.Close()
 
-	b, err := io.ReadAll(f)
-	if err != nil {
-		return nil, fmt.Errorf("read credentials: %w", err)
+	b, readErr := io.ReadAll(f)
+	closeErr := closeResource(f, "credentials")
+	if readErr != nil {
+		return nil, errors.Join(fmt.Errorf("read credentials: %w", readErr), closeErr)
+	}
+	if closeErr != nil {
+		return nil, closeErr
 	}
 
 	// If modifying these scopes, delete your previously saved token.json
@@ -74,16 +77,26 @@ func CheckCredentials() error {
 	if err != nil {
 		return fmt.Errorf("open credentials: %w", err)
 	}
-	defer f.Close()
 
-	b, err := io.ReadAll(f)
-	if err != nil {
-		return fmt.Errorf("read credentials: %w", err)
+	b, readErr := io.ReadAll(f)
+	closeErr := closeResource(f, "credentials")
+	if readErr != nil {
+		return errors.Join(fmt.Errorf("read credentials: %w", readErr), closeErr)
+	}
+	if closeErr != nil {
+		return closeErr
 	}
 	if _, err := google.ConfigFromJSON(b, calendar.CalendarEventsReadonlyScope); err != nil {
 		return fmt.Errorf("parse credentials: %w", err)
 	}
 
+	return nil
+}
+
+func closeResource(closer io.Closer, name string) error {
+	if err := closer.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", name, err)
+	}
 	return nil
 }
 

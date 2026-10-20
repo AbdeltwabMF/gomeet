@@ -41,8 +41,7 @@ func authorizeAccess(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token, er
 	// Use the allocated port for the redirect URI.
 	addr, ok := listener.Addr().(*net.TCPAddr)
 	if !ok {
-		listener.Close()
-		return nil, fmt.Errorf("unexpected listener address %v", listener.Addr())
+		return nil, closeListener(listener, fmt.Errorf("unexpected listener address %v", listener.Addr()))
 	}
 
 	oauthCfg := *cfg
@@ -50,8 +49,7 @@ func authorizeAccess(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token, er
 
 	state, err := randomState()
 	if err != nil {
-		listener.Close()
-		return nil, err
+		return nil, closeListener(listener, err)
 	}
 
 	result := make(chan oauthResult, 1)
@@ -95,6 +93,13 @@ func authorizeAccess(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token, er
 	case <-ctx.Done():
 		return nil, fmt.Errorf("authorization timed out: %w", ctx.Err())
 	}
+}
+
+func closeListener(listener net.Listener, cause error) error {
+	if err := listener.Close(); err != nil {
+		return errors.Join(cause, fmt.Errorf("close oauth listener: %w", err))
+	}
+	return cause
 }
 
 // oauthResult carries the outcome of the authorization callback.
@@ -154,7 +159,9 @@ func handleOAuthCallback(ctx context.Context, c chan<- oauthResult, cfg *oauth2.
 		return
 	}
 
-	fmt.Fprint(w, "Access granted! You can now close this window.")
+	if _, err := fmt.Fprint(w, "Access granted! You can now close this window."); err != nil {
+		slog.Warn("write oauth success response failed", slog.Any("error", err))
+	}
 
 	deliver(c, oauthResult{token: tok})
 }

@@ -50,8 +50,12 @@ func run(args []string, stdout, stderr io.Writer) error {
 		return err
 	}
 	if created {
-		fmt.Fprintf(stdout, "Created an empty configuration at %s\n", configPath)
-		fmt.Fprintln(stdout, "Add meetings to the events array, then run gomeet again. Run 'gomeet --doctor' for field details and system checks.")
+		if err := writeOutput(stdout, "Created an empty configuration at %s\n", configPath); err != nil {
+			return err
+		}
+		if err := writeOutput(stdout, "Add meetings to the events array, then run gomeet again. Run 'gomeet --doctor' for field details and system checks.\n"); err != nil {
+			return err
+		}
 		return nil
 	}
 
@@ -61,6 +65,10 @@ func run(args []string, stdout, stderr io.Writer) error {
 	}
 
 	if opts.background {
+		logPath, err := configs.LogPath()
+		if err != nil {
+			return err
+		}
 		executable, err := os.Executable()
 		if err != nil {
 			return fmt.Errorf("find executable: %w", err)
@@ -73,9 +81,7 @@ func run(args []string, stdout, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		logPath, _ := configs.LogPath()
-		fmt.Fprintf(stdout, "gomeet started in the background (PID %d). Logs: %s\n", pid, logPath)
-		return nil
+		return writeOutput(stdout, "gomeet started in the background (PID %d). Logs: %s\n", pid, logPath)
 	}
 
 	return monitor(cfg, opts.verbose, stdout, stderr)
@@ -83,13 +89,20 @@ func run(args []string, stdout, stderr io.Writer) error {
 
 func parseOptions(args []string, stderr io.Writer) (options, bool, error) {
 	var opts options
+	var usageErr error
 	flags := flag.NewFlagSet("gomeet", flag.ContinueOnError)
 	flags.SetOutput(stderr)
 	flags.Usage = func() {
-		fmt.Fprintln(stderr, "Usage: gomeet [--background] [--verbose] [--doctor]")
-		fmt.Fprintln(stderr, "  --background  detach and continue running in the background")
-		fmt.Fprintln(stderr, "  --doctor      check configuration and system requirements")
-		fmt.Fprintln(stderr, "  --verbose     include informational and debug log messages")
+		for _, line := range []string{
+			"Usage: gomeet [--background] [--verbose] [--doctor]",
+			"  --background  detach and continue running in the background",
+			"  --doctor      check configuration and system requirements",
+			"  --verbose     include informational and debug log messages",
+		} {
+			if usageErr == nil {
+				usageErr = writeOutput(stderr, "%s\n", line)
+			}
+		}
 	}
 	flags.BoolVar(&opts.background, "background", false, "run in the background")
 	flags.BoolVar(&opts.doctor, "doctor", false, "check configuration and requirements")
@@ -97,9 +110,9 @@ func parseOptions(args []string, stderr io.Writer) (options, bool, error) {
 	flags.BoolVar(&opts.verbose, "v", false, "enable verbose logging")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			return opts, true, nil
+			return opts, true, usageErr
 		}
-		return opts, false, err
+		return opts, false, errors.Join(err, usageErr)
 	}
 	if flags.NArg() != 0 {
 		return opts, false, fmt.Errorf("unexpected arguments: %v", flags.Args())
@@ -108,15 +121,28 @@ func parseOptions(args []string, stderr io.Writer) (options, bool, error) {
 	return opts, false, nil
 }
 
-func monitor(cfg *configs.Config, verbose bool, stdout, stderr io.Writer) error {
+func writeOutput(w io.Writer, format string, args ...any) error {
+	if _, err := fmt.Fprintf(w, format, args...); err != nil {
+		return fmt.Errorf("write output: %w", err)
+	}
+	return nil
+}
+
+func monitor(cfg *configs.Config, verbose bool, stdout, stderr io.Writer) (retErr error) {
 	f, err := configs.OpenLog()
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() {
+		if err := f.Close(); err != nil {
+			retErr = errors.Join(retErr, fmt.Errorf("close log: %w", err))
+		}
+	}()
 	configs.InitLogger(io.MultiWriter(f, stderr), verbose)
 
-	fmt.Fprintln(stdout, "gomeet is running in the foreground; press Ctrl+C to stop.")
+	if err := writeOutput(stdout, "gomeet is running in the foreground; press Ctrl+C to stop.\n"); err != nil {
+		return err
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()

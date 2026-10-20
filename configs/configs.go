@@ -104,16 +104,24 @@ func ensureConfigAt(path string) (bool, error) {
 	}
 
 	if _, err := io.WriteString(f, configTemplate); err != nil {
-		f.Close()
-		os.Remove(path)
-		return false, fmt.Errorf("write starter config: %w", err)
+		writeErr := fmt.Errorf("write starter config: %w", err)
+		closeErr := f.Close()
+		removeErr := os.Remove(path)
+		return false, errors.Join(writeErr, fileOperationError("close incomplete starter config", closeErr), fileOperationError("remove incomplete starter config", removeErr))
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(path)
-		return false, fmt.Errorf("close starter config: %w", err)
+		removeErr := os.Remove(path)
+		return false, errors.Join(fmt.Errorf("close starter config: %w", err), fileOperationError("remove incomplete starter config", removeErr))
 	}
 
 	return true, nil
+}
+
+func fileOperationError(operation string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", operation, err)
 }
 
 // OpenCredentials opens the credentials file for reading.
@@ -169,9 +177,10 @@ func LoadConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	cfg, decodeErr := DecodeConfig(f)
+	closeErr := fileOperationError("close config", f.Close())
 
-	return DecodeConfig(f)
+	return cfg, errors.Join(decodeErr, closeErr)
 }
 
 // DecodeConfig decodes and validates one complete configuration document.

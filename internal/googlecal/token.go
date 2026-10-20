@@ -44,11 +44,15 @@ func loadToken() (*oauth2.Token, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
 
 	tok := &oauth2.Token{}
-	if err := json.NewDecoder(f).Decode(tok); err != nil {
-		return nil, fmt.Errorf("decode token: %w", err)
+	decodeErr := json.NewDecoder(f).Decode(tok)
+	closeErr := tokenFileError("close token", f.Close())
+	if decodeErr != nil {
+		return nil, errors.Join(fmt.Errorf("decode token: %w", decodeErr), closeErr)
+	}
+	if closeErr != nil {
+		return nil, closeErr
 	}
 
 	return tok, nil
@@ -82,7 +86,7 @@ func saveToken(tok *oauth2.Token) error {
 }
 
 // writeToken stores the token at path atomically.
-func writeToken(path string, tok *oauth2.Token) error {
+func writeToken(path string, tok *oauth2.Token) (retErr error) {
 	dir := filepath.Dir(path)
 
 	tmp, err := os.CreateTemp(dir, "token-*.json")
@@ -90,10 +94,15 @@ func writeToken(path string, tok *oauth2.Token) error {
 		return fmt.Errorf("create temporary token file: %w", err)
 	}
 	tmpName := tmp.Name()
+	closed := false
 
 	defer func() {
-		tmp.Close()
-		os.Remove(tmpName)
+		if !closed {
+			retErr = errors.Join(retErr, tokenFileError("close temporary token file", tmp.Close()))
+		}
+		if err := os.Remove(tmpName); err != nil && !errors.Is(err, fs.ErrNotExist) {
+			retErr = errors.Join(retErr, fmt.Errorf("remove temporary token file: %w", err))
+		}
 	}()
 
 	if err := tmp.Chmod(0600); err != nil {
@@ -105,8 +114,10 @@ func writeToken(path string, tok *oauth2.Token) error {
 	if err := tmp.Sync(); err != nil {
 		return fmt.Errorf("sync token: %w", err)
 	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close token: %w", err)
+	closeErr := tmp.Close()
+	closed = true
+	if closeErr != nil {
+		return fmt.Errorf("close token: %w", closeErr)
 	}
 
 	if err := os.Rename(tmpName, path); err != nil {
@@ -114,6 +125,13 @@ func writeToken(path string, tok *oauth2.Token) error {
 	}
 
 	return nil
+}
+
+func tokenFileError(operation string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("%s: %w", operation, err)
 }
 
 // tokenSource persists refreshed tokens atomically, so that a restart does

@@ -29,7 +29,9 @@ func TestFetchFollowsPagination(t *testing.T) {
 		}
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(page)
+		if err := json.NewEncoder(w).Encode(page); err != nil {
+			t.Errorf("encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -59,7 +61,9 @@ func TestFetchUsesLocalDayBoundary(t *testing.T) {
 		timeMax = r.URL.Query().Get("timeMax")
 
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"items": []any{}})
+		if err := json.NewEncoder(w).Encode(map[string]any{"items": []any{}}); err != nil {
+			t.Errorf("encode response: %v", err)
+		}
 	}))
 	defer server.Close()
 
@@ -209,7 +213,8 @@ func TestEventKeyDistinguishesOccurrences(t *testing.T) {
 	if eventKey(e, first) == eventKey(e, second) {
 		t.Fatal("keys for different occurrences must differ")
 	}
-	if eventKey(e, first) != eventKey(e, first) {
+	firstKey := eventKey(e, first)
+	if repeatedKey := eventKey(e, first); firstKey != repeatedKey {
 		t.Fatal("keys for the same occurrence must match")
 	}
 }

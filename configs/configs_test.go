@@ -101,7 +101,11 @@ func TestEnsureConfigAtCreatesHelpfulEmptyTemplate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open config: %v", err)
 	}
-	defer f.Close()
+	t.Cleanup(func() {
+		if err := f.Close(); err != nil {
+			t.Errorf("close config: %v", err)
+		}
+	})
 	cfg, err := DecodeConfig(f)
 	if err != nil {
 		t.Fatalf("starter config is invalid: %v", err)

@@ -97,7 +97,8 @@ func TestLocalKeyIsStablePerOccurrence(t *testing.T) {
 	if localKey(event, first) == localKey(event, second) {
 		t.Fatal("keys for different occurrences must differ")
 	}
-	if localKey(event, first) != localKey(event, first) {
+	firstKey := localKey(event, first)
+	if repeatedKey := localKey(event, first); firstKey != repeatedKey {
 		t.Fatal("keys for the same occurrence must match")
 	}
 }
