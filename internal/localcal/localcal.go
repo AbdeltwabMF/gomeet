@@ -91,7 +91,7 @@ func occurrences(e *configs.Event, after, through time.Time, loc *time.Location)
 		return nil
 	}
 
-	hour, minute, ok := parseClock(e.Start.Time)
+	hour, minute, ok := configs.ParseClockTime(e.Start.Time)
 	if !ok {
 		return nil
 	}
@@ -116,7 +116,7 @@ func occurrences(e *configs.Event, after, through time.Time, loc *time.Location)
 	const maxDays = 366
 
 	var result []time.Time
-	for date := from; !date.After(to) && len(result) < maxDays; date = date.AddDate(0, 0, 1) {
+	for date, scanned := from, 0; !date.After(to) && scanned < maxDays; date, scanned = date.AddDate(0, 0, 1), scanned+1 {
 		day := date.In(loc)
 		if !days[day.Weekday()] {
 			continue
@@ -136,25 +136,6 @@ func startOfDay(t time.Time, loc *time.Location) time.Time {
 	day := t.In(loc)
 
 	return time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, loc)
-}
-
-// parseClock parses the strict "15:04" configuration format.
-func parseClock(value string) (hour, minute int, ok bool) {
-	if len(value) != 5 || value[2] != ':' {
-		return 0, 0, false
-	}
-
-	hour = int(value[0]-'0')*10 + int(value[1]-'0')
-	minute = int(value[3]-'0')*10 + int(value[4]-'0')
-	if value[0] < '0' || value[0] > '9' || value[1] < '0' || value[1] > '9' ||
-		value[3] < '0' || value[3] > '9' || value[4] < '0' || value[4] > '9' {
-		return 0, 0, false
-	}
-	if hour > 23 || minute > 59 {
-		return 0, 0, false
-	}
-
-	return hour, minute, true
 }
 
 // localKey builds a stable key for a single occurrence.

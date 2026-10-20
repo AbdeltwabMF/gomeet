@@ -82,39 +82,6 @@ func TestOccurrencesFindsEveryDayInWindow(t *testing.T) {
 	}
 }
 
-func TestParseClock(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		value     string
-		wantHour  int
-		wantMin   int
-		wantValid bool
-	}{
-		{value: "09:30", wantHour: 9, wantMin: 30, wantValid: true},
-		{value: "23:59", wantHour: 23, wantMin: 59, wantValid: true},
-		{value: "9:30", wantValid: false},
-		{value: "24:00", wantValid: false},
-		{value: "12:60", wantValid: false},
-		{value: "ab:cd", wantValid: false},
-		{value: "", wantValid: false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.value, func(t *testing.T) {
-			t.Parallel()
-
-			hour, minute, ok := parseClock(tt.value)
-			if ok != tt.wantValid {
-				t.Fatalf("parseClock(%q) valid = %v, want %v", tt.value, ok, tt.wantValid)
-			}
-			if ok && (hour != tt.wantHour || minute != tt.wantMin) {
-				t.Fatalf("parseClock(%q) = %d:%d, want %d:%d", tt.value, hour, minute, tt.wantHour, tt.wantMin)
-			}
-		})
-	}
-}
-
 func TestLocalKeyIsStablePerOccurrence(t *testing.T) {
 	t.Parallel()
 

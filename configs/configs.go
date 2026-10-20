@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -137,8 +136,8 @@ func (cfg *Config) Validate() error {
 		if err := platform.ValidateURL(e.URL); err != nil {
 			return fmt.Errorf("event %d URL: %w", i, err)
 		}
-		if err := validateClockTime(e.Start.Time); err != nil {
-			return fmt.Errorf("event %d start time %q: %w", i, e.Start.Time, err)
+		if _, _, ok := ParseClockTime(e.Start.Time); !ok {
+			return fmt.Errorf("event %d start time %q must use the 24-hour HH:MM format", i, e.Start.Time)
 		}
 		if len(e.Start.Days) == 0 {
 			return fmt.Errorf("event %d must include at least one day", i)
@@ -170,22 +169,27 @@ func parseWeekday(day string) (time.Weekday, bool) {
 	return 0, false
 }
 
-// validateClockTime requires the exact 24-hour "15:04" form used for matching.
-func validateClockTime(value string) error {
+// ParseClockTime parses the strict 24-hour "15:04" format used for meeting
+// start times. It rejects any other representation, including single digit
+// hours and signed values.
+func ParseClockTime(value string) (hour, minute int, ok bool) {
 	if len(value) != len("15:04") || value[2] != ':' {
-		return fmt.Errorf("must use the 24-hour HH:MM format")
+		return 0, 0, false
 	}
 
-	hour, err := strconv.Atoi(value[:2])
-	if err != nil || hour < 0 || hour > 23 {
-		return fmt.Errorf("must be a valid 24-hour time")
-	}
-	minute, err := strconv.Atoi(value[3:])
-	if err != nil || minute < 0 || minute > 59 {
-		return fmt.Errorf("must be a valid 24-hour time")
+	for _, i := range []int{0, 1, 3, 4} {
+		if value[i] < '0' || value[i] > '9' {
+			return 0, 0, false
+		}
 	}
 
-	return nil
+	hour = int(value[0]-'0')*10 + int(value[1]-'0')
+	minute = int(value[3]-'0')*10 + int(value[4]-'0')
+	if hour > 23 || minute > 59 {
+		return 0, 0, false
+	}
+
+	return hour, minute, true
 }
 
 // InitLogger initializes the default logger with the provided writer.
