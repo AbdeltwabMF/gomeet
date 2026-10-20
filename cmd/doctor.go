@@ -94,6 +94,15 @@ func runDoctor(w io.Writer) error {
 			problems++
 		} else {
 			report.printf("[OK]   Google Calendar credentials: %s\n", credentialsPath)
+			if !configs.HasToken() {
+				report.println("[WARN] Google authorization is pending. Run gomeet in the foreground or use --install-startup to start browser authorization.")
+			} else if tokenErr := googlecal.CheckToken(); tokenErr != nil {
+				report.printf("[FAIL] Google authorization token is invalid: %v\n", tokenErr)
+				report.printf("       Delete %s and authorize again.\n", configs.TokenFile)
+				problems++
+			} else {
+				report.println("[OK]   Google Calendar authorization token is readable.")
+			}
 		}
 	} else {
 		report.println("[INFO] Google Calendar is disabled.")

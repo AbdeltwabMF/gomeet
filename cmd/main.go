@@ -21,28 +21,46 @@ import (
 )
 
 type options struct {
-	background bool
-	doctor     bool
-	verbose    bool
+	background       bool
+	doctor           bool
+	installStartup   bool
+	uninstallStartup bool
+	yes              bool
+	verbose          bool
 }
 
 func main() {
-	if err := run(os.Args[1:], os.Stdout, os.Stderr); err != nil {
+	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "gomeet:", err)
 		os.Exit(1)
 	}
 }
 
-func run(args []string, stdout, stderr io.Writer) error {
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	opts, help, err := parseOptions(args, stderr)
 	if err != nil || help {
 		return err
 	}
-	if opts.doctor && opts.background {
-		return errors.New("--doctor and --background cannot be used together")
+	modeCount := 0
+	for _, enabled := range []bool{opts.background, opts.doctor, opts.installStartup, opts.uninstallStartup} {
+		if enabled {
+			modeCount++
+		}
+	}
+	if modeCount > 1 {
+		return errors.New("--background, --doctor, --install-startup, and --uninstall-startup cannot be combined")
+	}
+	if opts.yes && !opts.installStartup && !opts.uninstallStartup {
+		return errors.New("--yes requires --install-startup or --uninstall-startup")
+	}
+	if opts.installStartup && !platform.SupportsStartup() {
+		return errors.New("automatic startup installation is currently supported only on Windows")
 	}
 	if opts.doctor {
 		return runDoctor(stdout)
+	}
+	if opts.uninstallStartup {
+		return removeStartup(stdin, stdout, opts.yes)
 	}
 
 	configPath, created, err := configs.EnsureConfig()
@@ -62,6 +80,9 @@ func run(args []string, stdout, stderr io.Writer) error {
 	cfg, err := configs.LoadConfig()
 	if err != nil {
 		return fmt.Errorf("load %s: %w (run 'gomeet --doctor' for help)", configPath, err)
+	}
+	if opts.installStartup {
+		return setupStartup(stdin, stdout, opts.yes)
 	}
 
 	if opts.background {
@@ -94,9 +115,12 @@ func parseOptions(args []string, stderr io.Writer) (options, bool, error) {
 	flags.SetOutput(stderr)
 	flags.Usage = func() {
 		for _, line := range []string{
-			"Usage: gomeet [--background] [--verbose] [--doctor]",
+			"Usage: gomeet [--background | --doctor | --install-startup | --uninstall-startup] [--verbose] [--yes]",
 			"  --background  detach and continue running in the background",
 			"  --doctor      check configuration and system requirements",
+			"  --install-startup    install automatic startup for the current user",
+			"  --uninstall-startup  remove automatic startup for the current user",
+			"  --yes         skip startup installation or removal confirmation",
 			"  --verbose     include informational and debug log messages",
 		} {
 			if usageErr == nil {
@@ -106,6 +130,9 @@ func parseOptions(args []string, stderr io.Writer) (options, bool, error) {
 	}
 	flags.BoolVar(&opts.background, "background", false, "run in the background")
 	flags.BoolVar(&opts.doctor, "doctor", false, "check configuration and requirements")
+	flags.BoolVar(&opts.installStartup, "install-startup", false, "install automatic startup")
+	flags.BoolVar(&opts.uninstallStartup, "uninstall-startup", false, "remove automatic startup")
+	flags.BoolVar(&opts.yes, "yes", false, "skip startup confirmation")
 	flags.BoolVar(&opts.verbose, "verbose", false, "enable verbose logging")
 	flags.BoolVar(&opts.verbose, "v", false, "enable verbose logging")
 	if err := flags.Parse(args); err != nil {

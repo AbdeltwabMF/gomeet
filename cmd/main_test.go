@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"strings"
@@ -25,6 +26,69 @@ func TestParseOptions(t *testing.T) {
 	_, _, err = parseOptions([]string{"unexpected"}, &stderr)
 	if err == nil || !strings.Contains(err.Error(), "unexpected arguments") {
 		t.Fatalf("parseOptions(unexpected) error = %v", err)
+	}
+}
+
+func TestParseStartupOptions(t *testing.T) {
+	t.Parallel()
+
+	var stderr bytes.Buffer
+	opts, help, err := parseOptions([]string{"--install-startup", "--yes"}, &stderr)
+	if err != nil || help {
+		t.Fatalf("parseOptions() = (_, %v, %v), want options", help, err)
+	}
+	if !opts.installStartup || !opts.yes || opts.uninstallStartup {
+		t.Fatalf("parseOptions() = %+v", opts)
+	}
+}
+
+func TestGetConsent(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name      string
+		answer    string
+		assumeYes bool
+		want      bool
+	}{
+		{name: "yes", answer: "yes\n", want: true},
+		{name: "short yes", answer: "Y\n", want: true},
+		{name: "no", answer: "no\n", want: false},
+		{name: "empty defaults no", answer: "\n", want: false},
+		{name: "non-interactive approval", assumeYes: true, want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var output bytes.Buffer
+			got, err := getConsent(strings.NewReader(tt.answer), &output, tt.assumeYes, "Continue? [y/N] ")
+			if err != nil {
+				t.Fatalf("getConsent() error = %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("getConsent() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetConsentReusesBufferedInput(t *testing.T) {
+	t.Parallel()
+
+	input := bufio.NewReader(strings.NewReader("yes\nno\n"))
+	var output bytes.Buffer
+
+	first, err := getConsent(input, &output, false, "First? ")
+	if err != nil {
+		t.Fatalf("first getConsent() error = %v", err)
+	}
+	second, err := getConsent(input, &output, false, "Second? ")
+	if err != nil {
+		t.Fatalf("second getConsent() error = %v", err)
+	}
+	if !first || second {
+		t.Fatalf("getConsent() results = (%v, %v), want (true, false)", first, second)
 	}
 }
 

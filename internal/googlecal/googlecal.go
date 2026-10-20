@@ -36,6 +36,26 @@ const (
 
 // initService initializes the Google Calendar API service.
 func initService(ctx context.Context) (*calendar.Service, error) {
+	cfg, err := loadOAuthConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	tok, err := getToken(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	// Persist refreshed tokens so that a restart does not require the user to
+	// authorize again. The stored token is remembered, so that it is only
+	// written again when it actually changed.
+	source := &tokenSource{source: cfg.TokenSource(ctx, tok), last: tok}
+	client := oauth2.NewClient(ctx, source)
+
+	return calendar.NewService(ctx, option.WithHTTPClient(client))
+}
+
+func loadOAuthConfig() (*oauth2.Config, error) {
 	f, err := configs.OpenCredentials()
 	if err != nil {
 		return nil, fmt.Errorf("open credentials: %w", err)
@@ -56,41 +76,34 @@ func initService(ctx context.Context) (*calendar.Service, error) {
 		return nil, fmt.Errorf("parse credentials: %w", err)
 	}
 
-	tok, err := getToken(ctx, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	// Persist refreshed tokens so that a restart does not require the user to
-	// authorize again. The stored token is remembered, so that it is only
-	// written again when it actually changed.
-	source := &tokenSource{source: cfg.TokenSource(ctx, tok), last: tok}
-	client := oauth2.NewClient(ctx, source)
-
-	return calendar.NewService(ctx, option.WithHTTPClient(client))
+	return cfg, nil
 }
 
 // CheckCredentials verifies that the optional Google credentials file can be
 // read and parsed without starting OAuth or contacting Google.
 func CheckCredentials() error {
-	f, err := configs.OpenCredentials()
+	_, err := loadOAuthConfig()
+	return err
+}
+
+// Authorize ensures that Google Calendar has a stored OAuth token. When no
+// token exists, it opens the browser consent flow.
+func Authorize(ctx context.Context) error {
+	cfg, err := loadOAuthConfig()
 	if err != nil {
-		return fmt.Errorf("open credentials: %w", err)
+		return err
 	}
+	_, err = getToken(ctx, cfg)
+	return err
+}
 
-	b, readErr := io.ReadAll(f)
-	closeErr := closeResource(f, "credentials")
-	if readErr != nil {
-		return errors.Join(fmt.Errorf("read credentials: %w", readErr), closeErr)
+// CheckToken verifies that the stored OAuth token is readable.
+func CheckToken() error {
+	tok, err := loadToken()
+	if err != nil {
+		return err
 	}
-	if closeErr != nil {
-		return closeErr
-	}
-	if _, err := google.ConfigFromJSON(b, calendar.CalendarEventsReadonlyScope); err != nil {
-		return fmt.Errorf("parse credentials: %w", err)
-	}
-
-	return nil
+	return validateToken(tok)
 }
 
 func closeResource(closer io.Closer, name string) error {

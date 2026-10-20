@@ -20,6 +20,9 @@ import (
 func getToken(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token, error) {
 	tok, err := loadToken()
 	if err == nil {
+		if err := validateToken(tok); err != nil {
+			return nil, fmt.Errorf("load token: %w (delete %s to authorize again)", err, configs.TokenFile)
+		}
 		return tok, nil
 	}
 	if !errors.Is(err, fs.ErrNotExist) {
@@ -36,6 +39,16 @@ func getToken(ctx context.Context, cfg *oauth2.Config) (*oauth2.Token, error) {
 	}
 
 	return tok, nil
+}
+
+func validateToken(tok *oauth2.Token) error {
+	if tok.AccessToken == "" && tok.RefreshToken == "" {
+		return errors.New("token contains no access or refresh token")
+	}
+	if !tok.Valid() && tok.RefreshToken == "" {
+		return errors.New("token is expired and cannot be refreshed")
+	}
+	return nil
 }
 
 // loadToken loads the OAuth2 token from a file.

@@ -106,3 +106,28 @@ func TestWriteTokenKeepsPreviousFileOnFailure(t *testing.T) {
 		t.Fatalf("AccessToken = %q, want %q", loaded.AccessToken, "original")
 	}
 }
+
+func TestValidateToken(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name    string
+		token   *oauth2.Token
+		wantErr bool
+	}{
+		{name: "current access token", token: &oauth2.Token{AccessToken: "access", Expiry: time.Now().Add(time.Hour)}},
+		{name: "refreshable expired token", token: &oauth2.Token{RefreshToken: "refresh", Expiry: time.Now().Add(-time.Hour)}},
+		{name: "empty token", token: &oauth2.Token{}, wantErr: true},
+		{name: "expired without refresh", token: &oauth2.Token{AccessToken: "access", Expiry: time.Now().Add(-time.Hour)}, wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			err := validateToken(tt.token)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validateToken() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

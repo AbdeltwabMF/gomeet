@@ -146,12 +146,22 @@ func CredentialsPath() (string, error) {
 
 // OpenToken opens the token file for reading.
 func OpenToken() (*os.File, error) {
-	d, err := platform.ConfigDir()
+	path, err := TokenPath()
 	if err != nil {
 		return nil, err
 	}
 
-	return os.OpenFile(filepath.Join(d, TokenFile), os.O_RDONLY, 0600)
+	return os.Open(path)
+}
+
+// TokenPath returns the path to the optional Google OAuth token.
+func TokenPath() (string, error) {
+	d, err := platform.ConfigDir()
+	if err != nil {
+		return "", err
+	}
+
+	return filepath.Join(d, TokenFile), nil
 }
 
 // TokenDir returns the directory that stores the OAuth token.
@@ -167,6 +177,17 @@ func HasCredentials() bool {
 	}
 
 	info, err := os.Stat(filepath.Join(d, CredentialsFile))
+
+	return err == nil && !info.IsDir()
+}
+
+// HasToken reports whether a stored Google OAuth token is available.
+func HasToken() bool {
+	path, err := TokenPath()
+	if err != nil {
+		return false
+	}
+	info, err := os.Stat(path)
 
 	return err == nil && !info.IsDir()
 }
