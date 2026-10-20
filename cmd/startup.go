@@ -16,7 +16,7 @@ import (
 	"github.com/AbdeltwabMF/gomeet/internal/platform"
 )
 
-func setupStartup(stdin io.Reader, stdout io.Writer, assumeYes bool) error {
+func setupStartup(stdin io.Reader, stdout io.Writer, assumeYes, verbose bool) error {
 	if !platform.SupportsStartup() {
 		return errors.New("automatic startup installation is currently supported only on Windows")
 	}
@@ -54,13 +54,18 @@ func setupStartup(stdin io.Reader, stdout io.Writer, assumeYes bool) error {
 	if err != nil {
 		return fmt.Errorf("find executable: %w", err)
 	}
+	arguments := "none"
+	if verbose {
+		arguments = "--verbose"
+	}
 	if err := writeOutput(stdout, `Startup plan:
   Task:       GoMeet
   Trigger:    Current user signs in (30-second delay)
   Process:    %s
+  Arguments:  %s
   Window:     Hidden
   Recovery:   Restart up to 3 times; prevent duplicate instances
-`, executable); err != nil {
+`, executable, arguments); err != nil {
 		return err
 	}
 
@@ -71,7 +76,7 @@ func setupStartup(stdin io.Reader, stdout io.Writer, assumeYes bool) error {
 	if !approved {
 		return writeOutput(stdout, "Startup installation canceled.\n")
 	}
-	if err := platform.InstallStartup(ctx, executable); err != nil {
+	if err := platform.InstallStartup(ctx, executable, verbose); err != nil {
 		return err
 	}
 

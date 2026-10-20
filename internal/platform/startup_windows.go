@@ -18,6 +18,9 @@ const installStartupScript = `$ErrorActionPreference = 'Stop'
 $user = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $wscript = Join-Path $env:WINDIR 'System32\wscript.exe'
 $arguments = '//B //NoLogo "' + $env:GOMEET_LAUNCHER + '" "' + $env:GOMEET_EXECUTABLE + '"'
+if ($env:GOMEET_VERBOSE -eq '1') {
+    $arguments += ' --verbose'
+}
 $action = New-ScheduledTaskAction -Execute $wscript -Argument $arguments
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
 $trigger.Delay = 'PT30S'
@@ -32,10 +35,14 @@ const startupLauncherFile = "startup.vbs"
 // the console application with SW_HIDE, waits for it, and returns its exit code
 // so Task Scheduler can still apply the configured restart policy.
 const startupLauncherScript = `Option Explicit
-Dim shell, executable, exitCode
+Dim shell, executable, command, exitCode
 executable = WScript.Arguments(0)
+command = Chr(34) & executable & Chr(34)
+If WScript.Arguments.Count > 1 Then
+    command = command & " --verbose"
+End If
 Set shell = CreateObject("WScript.Shell")
-exitCode = shell.Run(Chr(34) & executable & Chr(34), 0, True)
+exitCode = shell.Run(command, 0, True)
 WScript.Quit exitCode
 `
 
@@ -50,7 +57,7 @@ if ($null -ne $task) {
 func SupportsStartup() bool { return true }
 
 // InstallStartup installs a per-user Windows scheduled task.
-func InstallStartup(ctx context.Context, executable string) error {
+func InstallStartup(ctx context.Context, executable string, verbose bool) error {
 	launcher, err := startupLauncherPath()
 	if err != nil {
 		return fmt.Errorf("locate startup launcher: %w", err)
@@ -59,12 +66,12 @@ func InstallStartup(ctx context.Context, executable string) error {
 		return err
 	}
 
-	return runStartupPowerShell(ctx, installStartupScript, launcher, executable)
+	return runStartupPowerShell(ctx, installStartupScript, launcher, executable, verbose)
 }
 
 // UninstallStartup removes the Windows scheduled task when present.
 func UninstallStartup(ctx context.Context) error {
-	if err := runStartupPowerShell(ctx, uninstallStartupScript, "", ""); err != nil {
+	if err := runStartupPowerShell(ctx, uninstallStartupScript, "", "", false); err != nil {
 		return err
 	}
 	launcher, err := startupLauncherPath()
@@ -93,7 +100,7 @@ func writeStartupLauncher(path string) error {
 	return nil
 }
 
-func runStartupPowerShell(ctx context.Context, script, launcher, executable string) error {
+func runStartupPowerShell(ctx context.Context, script, launcher, executable string, verbose bool) error {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -104,6 +111,9 @@ func runStartupPowerShell(ctx context.Context, script, launcher, executable stri
 	}
 	if executable != "" {
 		cmd.Env = append(cmd.Env, "GOMEET_EXECUTABLE="+executable)
+	}
+	if verbose {
+		cmd.Env = append(cmd.Env, "GOMEET_VERBOSE=1")
 	}
 	output, err := cmd.CombinedOutput()
 	if err == nil {

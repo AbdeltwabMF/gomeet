@@ -33,11 +33,11 @@ func TestParseStartupOptions(t *testing.T) {
 	t.Parallel()
 
 	var stderr bytes.Buffer
-	opts, help, err := parseOptions([]string{"--install-startup", "--yes"}, &stderr)
+	opts, help, err := parseOptions([]string{"--install-startup", "--verbose", "--yes"}, &stderr)
 	if err != nil || help {
 		t.Fatalf("parseOptions() = (_, %v, %v), want options", help, err)
 	}
-	if !opts.installStartup || !opts.yes || opts.uninstallStartup {
+	if !opts.installStartup || !opts.verbose || !opts.yes || opts.uninstallStartup {
 		t.Fatalf("parseOptions() = %+v", opts)
 	}
 }

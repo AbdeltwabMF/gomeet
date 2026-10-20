@@ -62,6 +62,13 @@ Keep the executable in a permanent location, then run:
 .\bin\gomeet.exe --install-startup --yes
 ```
 
+Add `--verbose` when installing to include informational and debug messages in
+the persistent log:
+
+```powershell
+.\bin\gomeet.exe --install-startup --verbose --yes
+```
+
 To remove automatic startup:
 
 ```powershell

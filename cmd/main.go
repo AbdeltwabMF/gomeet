@@ -82,7 +82,7 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return fmt.Errorf("load %s: %w (run 'gomeet --doctor' for help)", configPath, err)
 	}
 	if opts.installStartup {
-		return setupStartup(stdin, stdout, opts.yes)
+		return setupStartup(stdin, stdout, opts.yes, opts.verbose)
 	}
 
 	if opts.background {
