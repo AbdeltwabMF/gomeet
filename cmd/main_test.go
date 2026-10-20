@@ -1,12 +1,32 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/AbdeltwabMF/gomeet/configs"
 )
+
+func TestParseOptions(t *testing.T) {
+	t.Parallel()
+
+	var stderr bytes.Buffer
+	opts, help, err := parseOptions([]string{"--background", "--verbose"}, &stderr)
+	if err != nil || help {
+		t.Fatalf("parseOptions() = (_, %v, %v), want options", help, err)
+	}
+	if !opts.background || !opts.verbose || opts.doctor {
+		t.Fatalf("parseOptions() = %+v", opts)
+	}
+
+	_, _, err = parseOptions([]string{"unexpected"}, &stderr)
+	if err == nil || !strings.Contains(err.Error(), "unexpected arguments") {
+		t.Fatalf("parseOptions(unexpected) error = %v", err)
+	}
+}
 
 // TestMonitorGoogleRetries verifies that a failing Google monitor is retried
 // and that it never terminates the process on its own.

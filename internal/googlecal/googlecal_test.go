@@ -183,6 +183,22 @@ func TestMergeEventsDropsOldEvents(t *testing.T) {
 	}
 }
 
+func TestMergeEventsDropsRemovedEvents(t *testing.T) {
+	t.Parallel()
+
+	now := time.Date(2024, time.March, 5, 10, 0, 0, 0, time.UTC)
+	event := &calendar.Event{
+		Id:    "canceled",
+		Start: &calendar.EventDateTime{DateTime: now.Add(time.Minute).Format(time.RFC3339)},
+	}
+	known := map[string]*calendar.Event{eventKey(event, now.Add(time.Minute)): event}
+
+	mergeEvents(known, nil, now)
+	if len(known) != 0 {
+		t.Fatalf("known contains %d events after removal, want 0", len(known))
+	}
+}
+
 func TestEventKeyDistinguishesOccurrences(t *testing.T) {
 	t.Parallel()
 

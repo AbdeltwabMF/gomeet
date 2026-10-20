@@ -1,6 +1,8 @@
 package configs
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -59,6 +61,7 @@ func TestDecodeConfig(t *testing.T) {
 		wantErr bool
 	}{
 		{name: "valid", input: valid},
+		{name: "null document", input: `null`, wantErr: true},
 		{name: "unknown field", input: strings.Replace(valid, `"auto_start"`, `"autoStart"`, 1), wantErr: true},
 		{name: "trailing value", input: valid + `{}`, wantErr: true},
 		{name: "null event", input: `{"events":[null]}`, wantErr: true},
@@ -79,5 +82,36 @@ func TestDecodeConfig(t *testing.T) {
 				t.Fatalf("DecodeConfig() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
+	}
+}
+
+func TestEnsureConfigAtCreatesHelpfulEmptyTemplate(t *testing.T) {
+	t.Parallel()
+
+	path := filepath.Join(t.TempDir(), "config.json")
+	created, err := ensureConfigAt(path)
+	if err != nil {
+		t.Fatalf("ensureConfigAt() error = %v", err)
+	}
+	if !created {
+		t.Fatal("ensureConfigAt() created = false, want true")
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatalf("open config: %v", err)
+	}
+	defer f.Close()
+	cfg, err := DecodeConfig(f)
+	if err != nil {
+		t.Fatalf("starter config is invalid: %v", err)
+	}
+	if cfg.AutoStart || len(cfg.Events) != 0 {
+		t.Fatalf("starter config = %+v, want disabled with no events", cfg)
+	}
+
+	created, err = ensureConfigAt(path)
+	if err != nil || created {
+		t.Fatalf("second ensureConfigAt() = (%v, %v), want (false, nil)", created, err)
 	}
 }

@@ -3,6 +3,7 @@ package googlecal
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -23,8 +24,13 @@ func TestSaveTokenIsAtomicAndPrivate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat token: %v", err)
 	}
-	if perm := info.Mode().Perm(); perm != 0600 {
-		t.Fatalf("token permissions = %o, want 600", perm)
+	// Windows represents file access with ACLs and only exposes the writable
+	// bit through os.FileMode, so a private file commonly reports 0666 there.
+	// Exact Unix permission bits are meaningful only on Unix-like systems.
+	if runtime.GOOS != "windows" {
+		if perm := info.Mode().Perm(); perm != 0600 {
+			t.Fatalf("token permissions = %o, want 600", perm)
+		}
 	}
 
 	// No temporary files may be left behind.

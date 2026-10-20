@@ -4,7 +4,6 @@ FLAGS := "-s -w"
 
 ifeq ($(OS),Windows_NT)
 	BIN = gomeet.exe
-	FLAGS = "-H windowsgui -s -w"
 endif
 
 all:

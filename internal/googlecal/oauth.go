@@ -112,6 +112,13 @@ func handleOAuthCallback(ctx context.Context, c chan<- oauthResult, cfg *oauth2.
 	}
 
 	query := r.URL.Query()
+	// Validate state before acting on any provider response. Otherwise an
+	// unrelated request could abort the active authorization flow.
+	if subtle.ConstantTimeCompare([]byte(query.Get("state")), []byte(state)) != 1 {
+		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
+		return
+	}
+
 	if errCode := query.Get("error"); errCode != "" {
 		http.Error(w, "Authorization denied: "+errCode, http.StatusBadRequest)
 		deliver(c, oauthResult{err: fmt.Errorf("authorization denied: %s", errCode)})
@@ -122,11 +129,6 @@ func handleOAuthCallback(ctx context.Context, c chan<- oauthResult, cfg *oauth2.
 	if code == "" {
 		http.Error(w, "Missing code parameter", http.StatusBadRequest)
 		deliver(c, oauthResult{err: errors.New("missing authorization code")})
-		return
-	}
-
-	if subtle.ConstantTimeCompare([]byte(query.Get("state")), []byte(state)) != 1 {
-		http.Error(w, "Invalid state parameter", http.StatusBadRequest)
 		return
 	}
 

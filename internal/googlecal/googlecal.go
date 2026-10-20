@@ -67,6 +67,26 @@ func initService(ctx context.Context) (*calendar.Service, error) {
 	return calendar.NewService(ctx, option.WithHTTPClient(client))
 }
 
+// CheckCredentials verifies that the optional Google credentials file can be
+// read and parsed without starting OAuth or contacting Google.
+func CheckCredentials() error {
+	f, err := configs.OpenCredentials()
+	if err != nil {
+		return fmt.Errorf("open credentials: %w", err)
+	}
+	defer f.Close()
+
+	b, err := io.ReadAll(f)
+	if err != nil {
+		return fmt.Errorf("read credentials: %w", err)
+	}
+	if _, err := google.ConfigFromJSON(b, calendar.CalendarEventsReadonlyScope); err != nil {
+		return fmt.Errorf("parse credentials: %w", err)
+	}
+
+	return nil
+}
+
 // Monitor watches Google Calendar for meeting occurrences until the context
 // is cancelled.
 func Monitor(ctx context.Context, cfg *configs.Config) error {
@@ -211,20 +231,24 @@ func due(start, now time.Time) bool {
 	return now.Sub(start) <= startupGrace
 }
 
-// mergeEvents adds the fetched events to the known events and drops the
-// events that are too old to be reported.
+// mergeEvents updates the known events from one complete fetch. Removing
+// events absent from a successful fetch prevents canceled or deleted meetings
+// from firing from stale cache entries.
 func mergeEvents(known map[string]*calendar.Event, fetched []*calendar.Event, now time.Time) {
+	current := make(map[string]bool, len(fetched))
 	for _, e := range fetched {
 		start, ok := eventStart(e)
 		if !ok {
 			continue
 		}
-		known[eventKey(e, start)] = e
+		key := eventKey(e, start)
+		known[key] = e
+		current[key] = true
 	}
 
 	for key, e := range known {
 		start, ok := eventStart(e)
-		if !ok || now.Sub(start) > startupGrace {
+		if !current[key] || !ok || now.Sub(start) > startupGrace {
 			delete(known, key)
 		}
 	}

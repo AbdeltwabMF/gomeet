@@ -29,9 +29,9 @@ jobs:
           go-version: ${{ matrix.go-version }}
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v4
+        uses: golangci/golangci-lint-action@v8
         with:
-          version: v1.57.2
+          version: latest
           args: --timeout=30m
 
   release:
@@ -75,7 +75,6 @@ jobs:
           FLAGS="-s -w"
           if [[ "$GOOS" == "windows" ]]; then
             BINARY_NAME=$BINARY_NAME.exe
-            FLAGS="-H windowsgui -s -w"
           fi
           echo "BINARY_NAME=$BINARY_NAME" | tee -a $GITHUB_ENV
           echo "FLAGS=$FLAGS" | tee -a $GITHUB_ENV

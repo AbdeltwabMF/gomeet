@@ -91,6 +91,25 @@ func TestHandleOAuthCallbackRejectsProviderError(t *testing.T) {
 	}
 }
 
+func TestHandleOAuthCallbackIgnoresProviderErrorWithBadState(t *testing.T) {
+	t.Parallel()
+
+	result := make(chan oauthResult, 1)
+	cfg := &oauth2.Config{ClientID: "id", ClientSecret: "secret"}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/oauth2/callback?error=access_denied&state=wrong", nil)
+
+	handleOAuthCallback(context.Background(), result, cfg, "expected-state", recorder, request)
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", recorder.Code, http.StatusBadRequest)
+	}
+	select {
+	case res := <-result:
+		t.Fatalf("bad state must not abort the authorization flow: %v", res.err)
+	default:
+	}
+}
+
 func TestHandleOAuthCallbackRejectsWrongMethod(t *testing.T) {
 	t.Parallel()
 
