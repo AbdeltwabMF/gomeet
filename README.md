@@ -35,7 +35,7 @@ Before using `gomeet`, configure it with your details in a valid JSON format. Yo
 
 ## Build
 
-**Requirements**: [Go programming language](https://go.dev/) (version go1.22.1 or later)
+**Requirements**: [Go programming language](https://go.dev/) (version go1.26.1 or later)
 
 ```shell
 make build
